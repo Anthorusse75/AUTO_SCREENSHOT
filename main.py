@@ -4,7 +4,7 @@ from configuration.log_config import setup_logger
 from configuration.bluestacks_configurator import configurer_bluestacks
 from configuration.fenetre_utils import initialiser_fenetre_bluestacks
 from fonctions.detection_page import detecter_page_actuelle
-from fonctions.calendrier_du_chamionnat.Fonctions_detection_Combats import traiter_tous_les_combats
+from fonctions.calendrier_du_championnat.Fonctions_detection_Combats import traiter_tous_les_combats
 
 logger = setup_logger()
 logger.info("▶ Lancement de la vérification BlueStacks")
