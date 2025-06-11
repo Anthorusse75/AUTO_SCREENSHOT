@@ -40,7 +40,7 @@ Arborescence du répertoire : Y:\01 PROGRAMMATION\01 Python\09 AUTO SCREENSHOT
 │   │   └── victoire_cdc.png
 │   └── pages
 │       ├── calendrier_du_championnat.png
-│       ├── journal_de_gerre_de_guildes
+│       ├── journal_de_guerre_de_guildes
 │       │   ├── informations_combat.png
 │       │   ├── limites
 │       │   │   ├── basse.png
