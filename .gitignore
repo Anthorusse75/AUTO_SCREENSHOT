@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pdb
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+*.log
+
+# Environnements virtuels
+venv/
+env/
+.venv/
+.auto_screenshot_env/
+auto_screenshot_env/
+
+# VSCode & IDE
+.vscode/
+.idea/
+.history/
+*.code-workspace
+
+# Systèmes
+.DS_Store
+Thumbs.db
+
+# Fichiers de config/déploiement
+.env
+*.sqlite
+*.db
+
+# Node/npm (si jamais tu utilises du JS)
+node_modules/
+package-lock.json
+package.json

@@ -1,0 +1,14 @@
+{
+  "journal_de_guerre_de_guildes": {
+    "template": "journal_de_guerre_de_guildes.png",
+    "onglets": {
+      "dossier": "journal_de_gerre_de_guildes/onglets"
+    },
+    "limites": {
+      "dossier": "journal_de_gerre_de_guildes/limites"
+    }
+  },
+  "calendrier_du_championnat": {
+    "template": "calendrier_du_championnat.png"
+  }
+}

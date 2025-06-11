@@ -1,0 +1,8 @@
+opencv-python
+pyautogui
+pygetwindow
+numpy
+mss
+pillow
+loguru
+python-dotenv
