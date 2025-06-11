@@ -5,9 +5,12 @@ import pyautogui
 import hashlib
 
 from configuration.config import (
-    WINDOW_WIDTH, WINDOW_HEIGHT, TEMPLATES_PAGES_DIR
+    WINDOW_WIDTH,
+    WINDOW_HEIGHT,
+    TEMPLATES_PAGES_DIR,
+    COMBAT_MATCH_THRESHOLD,
 )
-from fonctions.detection_page import detecter_page_actuelle
+from fonctions.detection_page import detecter_page_actuelle, charger_image_cv2
 
 def detecter_combats(logger, window):
     """
@@ -19,14 +22,18 @@ def detecter_combats(logger, window):
         "defaite": os.path.join("templates", "calendrier_du_championnat", "defaite_cdc.png"),
         "egalite": os.path.join("templates", "calendrier_du_championnat", "egalite_cdc.png"),
     }
-    screenshot = pyautogui.screenshot(region=(window.left, window.top, WINDOW_WIDTH, WINDOW_HEIGHT))
-    screenshot_cv = cv2.cvtColor(np.array(screenshot), cv2.COLOR_RGB2GRAY)
+    screenshot = pyautogui.screenshot(
+        region=(window.left, window.top, WINDOW_WIDTH, WINDOW_HEIGHT)
+    )
+    screenshot_cv = cv2.cvtColor(np.array(screenshot), cv2.COLOR_RGB2BGR)
+    if len(screenshot_cv.shape) == 3:
+        screenshot_cv = cv2.cvtColor(screenshot_cv, cv2.COLOR_BGR2GRAY)
 
     combats = []
     seen = []
 
     for type_resultat, template_path in templates.items():
-        template = cv2.imread(template_path, cv2.IMREAD_GRAYSCALE)
+        template = charger_image_cv2(template_path)
         if template is None:
             logger.error(f"Template {type_resultat} introuvable : {template_path}")
             continue
@@ -35,8 +42,7 @@ def detecter_combats(logger, window):
         min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
         logger.info(f"{type_resultat}: max_val={max_val:.3f} at {max_loc}")
 
-        threshold = 0.7  # pour debug, baisse le seuil
-        loc = np.where(result >= threshold)
+        loc = np.where(result >= COMBAT_MATCH_THRESHOLD)
 
         for pt in zip(*loc[::-1]):
             # Évite les doublons proches (non-max suppression simplifiée)
@@ -76,10 +82,16 @@ def cliquer_sur_coord(logger, coord):
 
 # --- 3. Fonction pour cliquer sur la croix de sortie JGG ---
 def cliquer_croix_sortie_JGG(logger, window):
-    template_path = os.path.join(TEMPLATES_PAGES_DIR, "..", "journal_de_guerre_de_guildes", "croix_sortie_JGG.png")
-    template = cv2.imread(template_path, cv2.IMREAD_GRAYSCALE)
-    screenshot = pyautogui.screenshot(region=(window.left, window.top, WINDOW_WIDTH, WINDOW_HEIGHT))
-    screenshot_cv = cv2.cvtColor(np.array(screenshot), cv2.COLOR_RGB2GRAY)
+    template_path = os.path.join(
+        TEMPLATES_PAGES_DIR, "..", "journal_de_guerre_de_guildes", "croix_sortie_JGG.png"
+    )
+    template = charger_image_cv2(template_path)
+    screenshot = pyautogui.screenshot(
+        region=(window.left, window.top, WINDOW_WIDTH, WINDOW_HEIGHT)
+    )
+    screenshot_cv = cv2.cvtColor(np.array(screenshot), cv2.COLOR_RGB2BGR)
+    if len(screenshot_cv.shape) == 3:
+        screenshot_cv = cv2.cvtColor(screenshot_cv, cv2.COLOR_BGR2GRAY)
     result = cv2.matchTemplate(screenshot_cv, template, cv2.TM_CCOEFF_NORMED)
     min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
     if max_val < 0.8:

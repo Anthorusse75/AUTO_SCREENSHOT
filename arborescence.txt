@@ -2,7 +2,7 @@ Arborescence du répertoire : Y:\01 PROGRAMMATION\01 Python\09 AUTO SCREENSHOT
 
 ├── .env
 ├── configuration
-│   ├── __init.py__
+│   ├── __init__.py
 │   ├── bluestacks_configurator.py
 │   ├── bluestacks_reference.conf
 │   ├── config.py
@@ -10,8 +10,8 @@ Arborescence du répertoire : Y:\01 PROGRAMMATION\01 Python\09 AUTO SCREENSHOT
 │   ├── log_config.py
 │   └── pages_structure.json
 ├── fonctions
-│   ├── __init.py__
-│   ├── calendrier_du_chamionnat
+│   ├── __init__.py
+│   ├── calendrier_du_championnat
 │   └── detection_page.py
 ├── logs
 │   ├── archives
