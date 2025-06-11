@@ -1,3 +1,4 @@
+import sys
 import time
 
 from configuration.log_config import setup_logger
@@ -17,7 +18,7 @@ logger.info("✅ Vérification du fichier de configuration terminée")
 window = initialiser_fenetre_bluestacks(logger)
 if not window:
     logger.critical("❌ Impossible de poursuivre : la fenêtre BlueStacks est introuvable ou invalide.")
-    exit(1)
+    sys.exit(1)
 
 logger.info("✅ Fenêtre BlueStacks prête pour les actions automatiques")
 
@@ -28,7 +29,7 @@ time.sleep(2)
 page = detecter_page_actuelle(logger, window)
 if not page:
     logger.error("❌ Page inconnue – impossible de continuer.")
-    exit(1)
+    sys.exit(1)
 
 logger.info(f"📄 Page en cours : {page}")
 
