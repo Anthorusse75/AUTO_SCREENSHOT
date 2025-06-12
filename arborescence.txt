@@ -1,6 +1,8 @@
 Arborescence du répertoire : Y:\01 PROGRAMMATION\01 Python\09 AUTO SCREENSHOT
 
 ├── .env
+├── .venv
+├── bash.exe.stackdump
 ├── configuration
 │   ├── __init__.py
 │   ├── bluestacks_configurator.py
@@ -12,43 +14,48 @@ Arborescence du répertoire : Y:\01 PROGRAMMATION\01 Python\09 AUTO SCREENSHOT
 ├── fonctions
 │   ├── __init__.py
 │   ├── calendrier_du_championnat
-│   └── detection_page.py
+│   │   └── Fonctions_detection_Combats.py
+│   ├── detection_page.py
+│   ├── menu.py
+│   └── overlay.py
 ├── logs
 │   ├── archives
-│   │   ├── bluestacks_2025-05-29_21-51-29.log
-│   │   ├── bluestacks_2025-06-11_16-31-07.log
-│   │   ├── bluestacks_2025-06-11_16-31-36.log
-│   │   └── bluestacks_2025-06-11_16-32-09.log
+│   │   ├── bluestacks_2025-06-11_18-03-49.log
+│   │   ├── bluestacks_2025-06-11_18-13-42.log
+│   │   ├── bluestacks_2025-06-11_18-16-59.log
+│   │   └── bluestacks_2025-06-11_21-22-33.log
 │   └── bluestacks.log
 ├── main.py
+├── pyproject.toml
 ├── requirements.txt
-├── templates
-│   ├── buildings
-│   │   ├── baracks.png
-│   │   ├── bastion_of_fire.png
-│   │   ├── bastion_of_ice.png
-│   │   ├── bridge.png
-│   │   ├── citadel.png
-│   │   ├── foundry.png
-│   │   ├── gates_of_nature.png
-│   │   ├── lighthouse.png
-│   │   ├── mage_academy.png
-│   │   └── spring_of_elements.png
-│   ├── calendrier_du_championnat
-│   │   ├── defaite_cdc.png
-│   │   ├── egalite_cdc.png
-│   │   └── victoire_cdc.png
-│   └── pages
-│       ├── calendrier_du_championnat.png
-│       ├── journal_de_guerre_de_guildes
-│       │   ├── informations_combat.png
-│       │   ├── limites
-│       │   │   ├── basse.png
-│       │   │   ├── droite.png
-│       │   │   ├── gauche.png
-│       │   │   └── haute.png
-│       │   └── onglets
-│       │       ├── journal_d_attaque.png
-│       │       └── journal_de_defense.png
-│       └── journal_de_guerre_de_guildes.png
-└── venv
+└── templates
+    ├── buildings
+    │   ├── baracks.png
+    │   ├── bastion_of_fire.png
+    │   ├── bastion_of_ice.png
+    │   ├── bridge.png
+    │   ├── citadel.png
+    │   ├── foundry.png
+    │   ├── gates_of_nature.png
+    │   ├── lighthouse.png
+    │   ├── mage_academy.png
+    │   └── spring_of_elements.png
+    ├── calendrier_du_championnat
+    │   ├── defaite_cdc.png
+    │   ├── egalite_cdc.png
+    │   └── victoire_cdc.png
+    ├── journal_de_guerre_de_guildes
+    │   └── croix_sortie_JGG.png
+    └── pages
+        ├── calendrier_du_championnat.png
+        ├── journal_de_guerre_de_guildes
+        │   ├── informations_combat.png
+        │   ├── limites
+        │   │   ├── basse.png
+        │   │   ├── droite.png
+        │   │   ├── gauche.png
+        │   │   └── haute.png
+        │   └── onglets
+        │       ├── journal_d_attaque.png
+        │       └── journal_de_defense.png
+        └── journal_de_guerre_de_guildes.png

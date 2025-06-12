@@ -22,7 +22,7 @@ EXCLUDED_DIRS = {
 }
 
 COLLAPSED_DIRS = {
-    'venv',
+    '.venv',
 }
 
 def is_excluded(path):
