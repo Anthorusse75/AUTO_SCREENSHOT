@@ -14,3 +14,4 @@ pyscreeze==1.0.1
 python-dotenv==1.1.0
 pytweening==1.2.0
 win32-setctime==1.2.0
+keyboard==0.13.5

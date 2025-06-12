@@ -105,7 +105,9 @@ def cliquer_croix_sortie_JGG(logger, window):
 
 # --- 4. Fonction principale d'automatisation ---
 def traiter_tous_les_combats(logger, window):
+    """Traite tous les combats détectés et renvoie le nombre de combats réalisés."""
     deja_vus = set()
+    total_traites = 0
     while True:
         combats = detecter_combats(logger, window)
         # Filtrer ceux déjà cliqués (par leur hash)
@@ -128,12 +130,15 @@ def traiter_tous_les_combats(logger, window):
                 if page and page.get("page") == "calendrier_du_championnat":
                     logger.info("Retour au calendrier, on continue.")
                     deja_vus.add(combat['hash'])
+                    total_traites += 1
                 else:
                     logger.warning("Pas revenu au calendrier, arrêt.")
-                    return
+                    return total_traites
             else:
                 logger.warning("Pas sur la page JGG après clic, arrêt.")
-                return
+                return total_traites
+
+    return total_traites
 
 # --- 5. Fonction de suivi des combats déjà cliqués (optionnel si tu veux persister l'état) ---
 # Ici, on garde tout en mémoire, mais tu peux sauvegarder la liste combats dans un fichier si besoin.
