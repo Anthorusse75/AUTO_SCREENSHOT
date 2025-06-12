@@ -53,3 +53,12 @@ def setup_logger():
         logger.addHandler(stream_handler)
 
     return logger
+
+
+def toggle_debug(logger: logging.Logger) -> None:
+    """Basculer dynamiquement entre les niveaux INFO et DEBUG."""
+    new_level = logging.DEBUG if logger.level != logging.DEBUG else logging.INFO
+    logger.setLevel(new_level)
+    for handler in logger.handlers:
+        handler.setLevel(new_level)
+    logger.info("Nouveau niveau de log : %s", logging.getLevelName(new_level))

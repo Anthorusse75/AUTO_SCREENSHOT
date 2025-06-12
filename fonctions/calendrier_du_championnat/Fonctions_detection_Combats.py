@@ -17,6 +17,7 @@ def detecter_combats(logger, window):
     Détecte tous les combats à l'écran en cherchant les textes 'Victoire', 'Défaite', 'Égalité'.
     Retourne une liste de dicts : { 'id': int, 'coord': (x, y), 'type': str, 'clicked': False }
     """
+    logger.debug("Début de la détection des combats")
     templates = {
         "victoire": os.path.join("templates", "calendrier_du_championnat", "victoire_cdc.png"),
         "defaite": os.path.join("templates", "calendrier_du_championnat", "defaite_cdc.png"),
@@ -106,6 +107,7 @@ def cliquer_croix_sortie_JGG(logger, window):
 # --- 4. Fonction principale d'automatisation ---
 def traiter_tous_les_combats(logger, window):
     """Traite tous les combats détectés et renvoie le nombre de combats réalisés."""
+    logger.debug("Démarrage du traitement de tous les combats")
     deja_vus = set()
     total_traites = 0
     while True:
@@ -138,6 +140,7 @@ def traiter_tous_les_combats(logger, window):
                 logger.warning("Pas sur la page JGG après clic, arrêt.")
                 return total_traites
 
+    logger.info("Nombre total de combats traités : %s", total_traites)
     return total_traites
 
 # --- 5. Fonction de suivi des combats déjà cliqués (optionnel si tu veux persister l'état) ---
