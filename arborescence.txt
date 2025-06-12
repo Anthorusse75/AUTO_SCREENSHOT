@@ -20,10 +20,10 @@ Arborescence du répertoire : Y:\01 PROGRAMMATION\01 Python\09 AUTO SCREENSHOT
 │   └── overlay.py
 ├── logs
 │   ├── archives
-│   │   ├── bluestacks_2025-06-11_18-03-49.log
-│   │   ├── bluestacks_2025-06-11_18-13-42.log
-│   │   ├── bluestacks_2025-06-11_18-16-59.log
-│   │   └── bluestacks_2025-06-11_21-22-33.log
+│   │   ├── bluestacks_2025-06-12_21-21-10.log
+│   │   ├── bluestacks_2025-06-12_21-27-42.log
+│   │   ├── bluestacks_2025-06-12_21-33-00.log
+│   │   └── bluestacks_2025-06-12_21-35-17.log
 │   └── bluestacks.log
 ├── main.py
 ├── pyproject.toml
@@ -41,6 +41,11 @@ Arborescence du répertoire : Y:\01 PROGRAMMATION\01 Python\09 AUTO SCREENSHOT
     │   ├── mage_academy.png
     │   └── spring_of_elements.png
     ├── calendrier_du_championnat
+    │   ├── defaite
+    │   │   ├── def_bas.png
+    │   │   ├── def_droite.png
+    │   │   ├── def_gauche.png
+    │   │   └── def_haute.png
     │   ├── defaite_cdc.png
     │   ├── egalite_cdc.png
     │   └── victoire_cdc.png
