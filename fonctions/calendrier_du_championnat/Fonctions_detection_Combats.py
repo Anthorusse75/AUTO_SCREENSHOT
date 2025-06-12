@@ -9,18 +9,23 @@ from configuration.config import (
     WINDOW_HEIGHT,
     TEMPLATES_PAGES_DIR,
     COMBAT_MATCH_THRESHOLD,
+    COMBAT_RECT_MATCH_THRESHOLD,
 )
 from fonctions.detection_page import detecter_page_actuelle, charger_image_cv2
 
 def detecter_combats(logger, window):
     """
-    Détecte tous les combats à l'écran en cherchant les textes 'Victoire', 'Défaite', 'Égalité'.
+    Détecte tous les combats à l'écran.
+
+    Les résultats 'Victoire' et 'Égalité' sont recherchés via leurs textes,
+    tandis que les défaites sont détectées à partir des quatre bords du
+    rectangle (def_haute, def_bas, def_gauche, def_droite).
+
     Retourne une liste de dicts : { 'id': int, 'coord': (x, y), 'type': str, 'clicked': False }
     """
     logger.debug("Début de la détection des combats")
     templates = {
         "victoire": os.path.join("templates", "calendrier_du_championnat", "victoire_cdc.png"),
-        "defaite": os.path.join("templates", "calendrier_du_championnat", "defaite_cdc.png"),
         "egalite": os.path.join("templates", "calendrier_du_championnat", "egalite_cdc.png"),
     }
     screenshot = pyautogui.screenshot(
@@ -59,6 +64,26 @@ def detecter_combats(logger, window):
                 'type': type_resultat,
                 'hash': patch_hash,
             })
+
+    # Détection des rectangles de défaite via les bords
+    rects_defaite = detecter_rectangles_defaite(logger, screenshot_cv)
+    for rect in rects_defaite:
+        center = (
+            rect["x_gauche"] + (rect["x_droite"] - rect["x_gauche"]) // 2,
+            rect["y_haute"] + (rect["y_basse"] - rect["y_haute"]) // 2,
+        )
+        if any(np.linalg.norm(np.array(center) - np.array(s)) < 30 for s in seen):
+            continue
+        seen.append(center)
+        patch_hash = get_patch_hash_center(screenshot_cv, center)
+        if patch_hash in [c['hash'] for c in combats]:
+            continue
+        combats.append({
+            'id': len(combats) + 1,
+            'coord': (window.left + center[0], window.top + center[1]),
+            'type': 'defaite',
+            'hash': patch_hash,
+        })
     logger.info(f"{len(combats)} combats détectés à l'écran (victoire/défaite/égalité).")
     return combats
 
@@ -74,6 +99,62 @@ def get_patch_hash(screenshot_cv, pt, template_shape, patch_size=(60, 20)):
     patch = screenshot_cv[y1:y2, x1:x2]
     # Hash du patch
     return hashlib.md5(patch.tobytes()).hexdigest()
+
+def get_patch_hash_center(screenshot_cv, center, patch_size=(60, 20)):
+    """Calcule un hash d'une zone autour du centre fourni."""
+    x_c, y_c = center
+    w, h = patch_size
+    x1 = max(int(x_c - w // 2), 0)
+    y1 = max(int(y_c - h // 2), 0)
+    x2 = min(x1 + w, screenshot_cv.shape[1])
+    y2 = min(y1 + h, screenshot_cv.shape[0])
+    patch = screenshot_cv[y1:y2, x1:x2]
+    return hashlib.md5(patch.tobytes()).hexdigest()
+
+def detecter_rectangles_defaite(logger, screenshot_cv):
+    """Détecte les rectangles de résultat 'Défaite' à partir des 4 bords."""
+    dossier = os.path.join("templates", "calendrier_du_championnat", "defaite")
+    fichiers = {
+        "haut": "def_haute.png",
+        "bas": "def_bas.png",
+        "gauche": "def_gauche.png",
+        "droite": "def_droite.png",
+    }
+
+    matches = {}
+    tailles = {}
+    for nom, fichier in fichiers.items():
+        chemin = os.path.join(dossier, fichier)
+        template = charger_image_cv2(chemin)
+        if template is None:
+            logger.error(f"Template {chemin} introuvable")
+            return []
+        res = cv2.matchTemplate(screenshot_cv, template, cv2.TM_CCOEFF_NORMED)
+        loc = np.where(res >= COMBAT_RECT_MATCH_THRESHOLD)
+        matches[nom] = list(zip(*loc[::-1]))
+        tailles[nom] = (template.shape[1], template.shape[0])
+
+    rectangles = []
+    tol = 5
+    for (xg, yg) in matches.get("gauche", []):
+        for (xd, yd) in matches.get("droite", []):
+            if abs(yd - yg) <= tol and xd > xg:
+                for (xt, yt) in matches.get("haut", []):
+                    if abs(yt - yg) <= tol and abs(xt - xg) <= tol:
+                        for (xb, yb) in matches.get("bas", []):
+                            if abs(xb - xg) <= tol and yb > yt:
+                                rect = {
+                                    "x_gauche": xg + tailles["gauche"][0],
+                                    "x_droite": xd,
+                                    "y_haute": yt + tailles["haut"][1],
+                                    "y_basse": yb,
+                                }
+                                rectangles.append(rect)
+                                break
+                        break
+                break
+    logger.info(f"{len(rectangles)} rectangles de défaite détectés")
+    return rectangles
 
 # --- 2. Fonction de clic générique ---
 def cliquer_sur_coord(logger, coord):

@@ -17,3 +17,4 @@ PAGE_MATCH_THRESHOLD = 0.94      # seuil pour matchTemplate sur les pages
 TAB_MATCH_THRESHOLD = 0.85       # seuil pour matchTemplate sur les onglets
 LIMIT_MATCH_THRESHOLD = 0.80     # seuil pour les limites (scroll)
 COMBAT_MATCH_THRESHOLD = 0.99    # seuil pour la détection des combats
+COMBAT_RECT_MATCH_THRESHOLD = 0.80  # seuil pour la détection des rectangles de défaite
