@@ -90,6 +90,7 @@ def detecter_limites_scroll(logger, screenshot_cv, dossier_limites):
     return rect
 
 def detecter_page_actuelle(logger, window):
+    logger.debug("Détection de la page en cours")
     if not window:
         logger.error("❌ Impossible de détecter la page : fenêtre BlueStacks non trouvée.")
         return None
@@ -134,8 +135,10 @@ def detecter_page_actuelle(logger, window):
     if "limites" in config:
         dossier_limites = os.path.join(TEMPLATES_PAGES_DIR, config["limites"]["dossier"])
         limites_scroll = detecter_limites_scroll(logger, screenshot_cv, dossier_limites)
-    return {
+    resultat = {
         "page": page_detectee,
         "onglet": onglet_actif,
         "limites": limites_scroll,
     }
+    logger.debug("Page détectée: %s", resultat)
+    return resultat
