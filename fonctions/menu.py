@@ -56,3 +56,4 @@ def boucle_principale(logger, window, overlay: Overlay):
     keyboard.add_hotkey('f9', lambda: toggle_debug(logger))
     keyboard.wait('esc')
     logger.info("🚪 Touche ESC détectée : arrêt du programme.")
+    overlay.stop()

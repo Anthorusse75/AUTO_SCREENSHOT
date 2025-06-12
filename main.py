@@ -1,5 +1,6 @@
 import sys
 import time
+import threading
 
 from configuration.log_config import setup_logger
 from configuration.bluestacks_configurator import configurer_bluestacks
@@ -26,5 +27,13 @@ logger.info("✅ Fenêtre BlueStacks prête pour les actions automatiques")
 time.sleep(2)
 
 overlay = Overlay(window)
-# Boucle principale d'interaction
-boucle_principale(logger, window, overlay)
+
+# Boucle principale d'interaction exécutée dans un thread séparé
+threading.Thread(
+    target=boucle_principale,
+    args=(logger, window, overlay),
+    daemon=True,
+).start()
+
+# L'overlay doit tourner dans le thread principal
+overlay.start()
