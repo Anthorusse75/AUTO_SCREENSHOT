@@ -1,4 +1,3 @@
-import threading
 import tkinter as tk
 
 class Overlay:
@@ -24,7 +23,14 @@ class Overlay:
         tk.Label(frame, textvariable=self.action_var, fg="white", bg="black", font=("Arial", 10)).pack(fill="x", padx=5, pady=(0, 4))
 
         self.update_position()
-        threading.Thread(target=self.root.mainloop, daemon=True).start()
+
+    def start(self):
+        """Démarre la boucle Tk de l'overlay."""
+        self.root.mainloop()
+
+    def stop(self):
+        """Arrête la boucle Tk en toute sécurité."""
+        self.root.after(0, self.root.quit)
 
     def update_position(self):
         if self.window:
@@ -34,19 +40,19 @@ class Overlay:
         self.root.after(500, self.update_position)
 
     def set_phase(self, text: str):
-        self.phase_var.set(text)
+        self.root.after(0, self.phase_var.set, text)
 
     def set_action(self, text: str):
-        self.action_var.set(text)
+        self.root.after(0, self.action_var.set, text)
 
     def hide(self):
         if self.visible:
-            self.root.withdraw()
+            self.root.after(0, self.root.withdraw)
             self.visible = False
 
     def show(self):
         if not self.visible:
-            self.root.deiconify()
+            self.root.after(0, self.root.deiconify)
             self.visible = True
 
     def toggle(self):
