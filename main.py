@@ -5,6 +5,7 @@ from configuration.log_config import setup_logger
 from configuration.bluestacks_configurator import configurer_bluestacks
 from configuration.fenetre_utils import initialiser_fenetre_bluestacks
 from fonctions.menu import boucle_principale
+from fonctions.overlay import Overlay
 
 logger = setup_logger()
 logger.info("▶ Lancement de la vérification BlueStacks")
@@ -24,6 +25,6 @@ logger.info("✅ Fenêtre BlueStacks prête pour les actions automatiques")
 # Attendre un peu pour s'assurer que la fenêtre est prête
 time.sleep(2)
 
-
+overlay = Overlay(window)
 # Boucle principale d'interaction
-boucle_principale(logger, window)
+boucle_principale(logger, window, overlay)
