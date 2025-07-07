@@ -12,6 +12,21 @@ import tkinter as tk
 from fonctions.overlay import Overlay
 
 
+def lister_tous_les_templates(root_dir: str = "templates") -> List[Dict[str, str]]:
+    """Retourne la liste de tous les templates PNG du projet.
+
+    Chaque élément contient le chemin absolu et une description relative
+    au dossier ``root_dir``.
+    """
+    templates = []
+    for dirpath, _, filenames in os.walk(root_dir):
+        for filename in sorted(f for f in filenames if f.lower().endswith(".png")):
+            path = os.path.join(dirpath, filename)
+            description = os.path.relpath(path, root_dir)
+            templates.append({"path": path, "description": description})
+    return sorted(templates, key=lambda t: t["description"])
+
+
 def capturer_templates(logger, window, overlay: Overlay, templates: List[Dict[str, str]]):
     """Lance la capture manuelle d'une liste de templates.
 

@@ -5,7 +5,7 @@ import pymsgbox
 
 from configuration.log_config import toggle_debug
 from fonctions.overlay import Overlay
-from fonctions.template_recorder import capturer_templates
+from fonctions.template_recorder import capturer_templates, lister_tous_les_templates
 
 from fonctions.detection_page import detecter_page_actuelle
 from fonctions.calendrier_du_championnat.Fonctions_detection_Combats import traiter_tous_les_combats
@@ -76,18 +76,5 @@ def boucle_principale(logger, window, overlay: Overlay):
     overlay.stop()
 
 def lancer_recapture(logger, window, overlay: Overlay):
-    templates = [
-        {
-            "path": os.path.join("templates", "calendrier_du_championnat", "victoire_cdc.png"),
-            "description": "Victoire CDC",
-        },
-        {
-            "path": os.path.join("templates", "calendrier_du_championnat", "egalite_cdc.png"),
-            "description": "Egalite CDC",
-        },
-        {
-            "path": os.path.join("templates", "calendrier_du_championnat", "defaite_cdc.png"),
-            "description": "Defaite CDC",
-        },
-    ]
+    templates = lister_tous_les_templates()
     capturer_templates(logger, window, overlay, templates)
