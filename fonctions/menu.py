@@ -11,6 +11,7 @@ from fonctions.detection_page import detecter_page_actuelle
 from fonctions.calendrier_du_championnat.Fonctions_detection_Combats import (
     traiter_tous_les_combats,
     debug_detection_combats,
+    debug_detection_combats_avance,
 )
 
 
@@ -21,7 +22,8 @@ def afficher_aide(logger=None):
     message = (
         "F1 : Afficher l'aide\n"
         "F3 : Lancer la capture automatique\n"
-        "F6 : Debug - surligner les combats\n"
+        "F6 : Debug - surligner les combats (méthode grille)\n"
+        "F7 : Debug avancé - comparer les deux méthodes\n"
         "F12 : Reprendre les templates manuellement\n"
         "F9 : Basculer le mode debug\n"
         "F8 : Afficher/Masquer l'overlay\n"
@@ -57,12 +59,13 @@ def lancer_capture(logger, window, overlay: Overlay):
 def boucle_principale(logger, window, overlay: Overlay):
     """Boucle d'attente principale pour les raccourcis clavier."""
     logger.info(
-        "⌨️  F1 aide | F3 capture | F6 debug combats | F12 recapture | F9 debug log | ESC quitter"
+        "⌨️  F1 aide | F3 capture | F6 debug | F7 debug avancé | F12 recapture | F9 debug log | ESC quitter"
     )
     keyboard.add_hotkey('f1', lambda: afficher_aide(logger))
     overlay.set_phase("En attente")
     keyboard.add_hotkey('f3', lambda: lancer_capture(logger, window, overlay))
     keyboard.add_hotkey('f6', lambda: debug_detection_combats(logger, window, overlay))
+    keyboard.add_hotkey('f7', lambda: debug_detection_combats_avance(logger, window, overlay))
     keyboard.add_hotkey('f12', lambda: lancer_recapture(logger, window, overlay))
     keyboard.add_hotkey('f8', lambda: overlay.toggle())
     keyboard.add_hotkey('f9', lambda: toggle_debug(logger))
