@@ -41,20 +41,30 @@ def capturer_templates(logger, window, overlay: Overlay, templates: List[Dict[st
     stop_capture = False
 
     cursor_win = None
+    cursor_canvas = None
+    cursor_rect = None
     create_event = threading.Event()
 
     def create_cursor_window():
-        nonlocal cursor_win
+        nonlocal cursor_win, cursor_canvas, cursor_rect
         win = tk.Toplevel(overlay.root)
         win.overrideredirect(True)
         win.attributes("-topmost", True)
         win.attributes("-transparentcolor", "magenta")
         win.configure(bg="magenta")
-        canvas = tk.Canvas(win, width=width, height=height, highlightthickness=0, bg="magenta")
+        win.geometry(f"{window.width}x{window.height}+{window.left}+{window.top}")
+
+        canvas = tk.Canvas(win, width=window.width, height=window.height,
+                           highlightthickness=0, bg="magenta")
         canvas.pack()
-        canvas.create_rectangle(0, 0, width - 1, height - 1, outline="red", width=2)
-        win.withdraw()
+        rect = canvas.create_rectangle(0, 0, width, height,
+                                       outline="red", width=2)
+        canvas.itemconfigure(rect, state="hidden")
+
         cursor_win = win
+        cursor_canvas = canvas
+        cursor_rect = rect
+        win.withdraw()
         create_event.set()
 
     overlay.root.after(0, create_cursor_window)
@@ -79,7 +89,6 @@ def capturer_templates(logger, window, overlay: Overlay, templates: List[Dict[st
             stop_capture = True
         else:
             overlay.set_action(templates[index]["description"])
-        cursor_win.deiconify()
         return "break"
 
     overlay.root.after(0, lambda: cursor_win.bind("<Button-1>", capture_current))
@@ -108,9 +117,19 @@ def capturer_templates(logger, window, overlay: Overlay, templates: List[Dict[st
             x, y = pyautogui.position()
             left = int(x - width / 2)
             top = int(y - height / 2)
-            cursor_win.geometry(f"{width}x{height}+{left}+{top}")
+            # position relative to the BlueStacks window
+            rel_x = left - window.left
+            rel_y = top - window.top
+            cursor_canvas.coords(cursor_rect,
+                                rel_x,
+                                rel_y,
+                                rel_x + width,
+                                rel_y + height)
+            cursor_canvas.itemconfigure(cursor_rect, state="normal")
+            cursor_win.geometry(f"{window.width}x{window.height}+{window.left}+{window.top}")
             cursor_win.deiconify()
         else:
+            cursor_canvas.itemconfigure(cursor_rect, state="hidden")
             cursor_win.withdraw()
         overlay.root.after(30, update_cursor)
 
