@@ -46,10 +46,13 @@ def capturer_templates(logger, window, overlay: Overlay, templates: List[Dict[st
     # template en fonction du fichier existant correspondant s'il est déjà
     # présent sur le disque. On démarre avec une valeur par défaut.
     width, height = 100, 100
+    border = 2
+    frame_width = width + border * 2
+    frame_height = height + border * 2
 
     def update_size_from_template():
         """Ajuste ``width`` et ``height`` suivant le template courant."""
-        nonlocal width, height
+        nonlocal width, height, frame_width, frame_height
         path = templates[index]["path"]
         if os.path.exists(path):
             try:
@@ -57,6 +60,8 @@ def capturer_templates(logger, window, overlay: Overlay, templates: List[Dict[st
                     width, height = img.size
             except Exception:
                 pass
+        frame_width = width + border * 2
+        frame_height = height + border * 2
 
     overlay.set_phase("Capture templates (CTRL + clic droit)")
     index = 0
@@ -82,7 +87,7 @@ def capturer_templates(logger, window, overlay: Overlay, templates: List[Dict[st
         canvas = tk.Canvas(win, width=window.width, height=window.height,
                            highlightthickness=0, bg="magenta")
         canvas.pack()
-        rect = canvas.create_rectangle(0, 0, width, height,
+        rect = canvas.create_rectangle(0, 0, frame_width, frame_height,
                                        outline="red", width=2)
         canvas.itemconfigure(rect, state="hidden")
 
@@ -104,7 +109,7 @@ def capturer_templates(logger, window, overlay: Overlay, templates: List[Dict[st
         top = int(y - height / 2)
         cursor_win.withdraw()
         overlay.root.update_idletasks()
-        time.sleep(0.05)
+        time.sleep(0.1)
         screenshot = pyautogui.screenshot(region=(left, top, width, height))
         os.makedirs(os.path.dirname(templates[index]["path"]), exist_ok=True)
         screenshot.save(templates[index]["path"])
@@ -156,14 +161,16 @@ def capturer_templates(logger, window, overlay: Overlay, templates: List[Dict[st
             x, y = pyautogui.position()
             left = int(x - width / 2)
             top = int(y - height / 2)
+            frame_left = int(x - frame_width / 2)
+            frame_top = int(y - frame_height / 2)
             # position relative to the BlueStacks window
-            rel_x = left - window.left
-            rel_y = top - window.top
+            rel_x = frame_left - window.left
+            rel_y = frame_top - window.top
             cursor_canvas.coords(cursor_rect,
                                 rel_x,
                                 rel_y,
-                                rel_x + width,
-                                rel_y + height)
+                                rel_x + frame_width,
+                                rel_y + frame_height)
             cursor_canvas.itemconfigure(cursor_rect, state="normal")
             cursor_win.geometry(f"{window.width}x{window.height}+{window.left}+{window.top}")
             cursor_win.deiconify()
