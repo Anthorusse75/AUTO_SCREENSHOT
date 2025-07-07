@@ -41,19 +41,27 @@ def capturer_templates(logger, window, overlay: Overlay, templates: List[Dict[st
         logger.warning("Aucun template à capturer")
         return
 
-    # Détermination de la taille à utiliser
-    width = height = None
-    for tpl in templates:
-        if os.path.exists(tpl["path"]):
-            img = Image.open(tpl["path"])
-            width, height = img.size
-            break
-    if width is None:
-        width, height = 100, 100
+    # Dimensions courantes du cadre. Elles sont mises à jour pour chaque
+    # template en fonction du fichier existant correspondant s'il est déjà
+    # présent sur le disque. On démarre avec une valeur par défaut.
+    width, height = 100, 100
+
+    def update_size_from_template():
+        """Ajuste ``width`` et ``height`` suivant le template courant."""
+        nonlocal width, height
+        path = templates[index]["path"]
+        if os.path.exists(path):
+            try:
+                with Image.open(path) as img:
+                    width, height = img.size
+            except Exception:
+                pass
 
     overlay.set_phase("Capture templates (CTRL + clic droit)")
     index = 0
     stop_capture = False
+
+    update_size_from_template()
 
     cursor_win = None
     cursor_canvas = None
@@ -104,6 +112,7 @@ def capturer_templates(logger, window, overlay: Overlay, templates: List[Dict[st
         if index >= len(templates):
             stop_capture = True
         else:
+            update_size_from_template()
             overlay.set_action(templates[index]["description"])
         return "break"
 
@@ -129,6 +138,7 @@ def capturer_templates(logger, window, overlay: Overlay, templates: List[Dict[st
                 if index >= len(templates):
                     stop_capture = True
                 else:
+                    update_size_from_template()
                     overlay.set_action(templates[index]["description"])
         except AttributeError:
             pass
