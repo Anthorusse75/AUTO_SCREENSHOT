@@ -5,7 +5,7 @@ from typing import List, Dict
 import keyboard as kb
 import pyautogui
 from PIL import Image
-from pynput import mouse, keyboard as pynput_keyboard
+from pynput import keyboard as pynput_keyboard
 import tkinter as tk
 
 from fonctions.overlay import Overlay
@@ -53,19 +53,16 @@ def capturer_templates(logger, window, overlay: Overlay, templates: List[Dict[st
 
     cursor_win = create_cursor_window()
 
-    def on_click(x, y, button, pressed):
+    def capture_current(_event=None):
         nonlocal index, stop_capture
-        if stop_capture:
-            return False
-        if not pressed:
-            return
-        if button != mouse.Button.left:
-            return
-        if not kb.is_pressed('ctrl'):
-            return
-        # Capture de la zone
+        if stop_capture or not kb.is_pressed('ctrl'):
+            return "break"
+        x, y = pyautogui.position()
         left = int(x - width / 2)
         top = int(y - height / 2)
+        cursor_win.withdraw()
+        overlay.root.update_idletasks()
+        time.sleep(0.05)
         screenshot = pyautogui.screenshot(region=(left, top, width, height))
         os.makedirs(os.path.dirname(templates[index]["path"]), exist_ok=True)
         screenshot.save(templates[index]["path"])
@@ -73,8 +70,12 @@ def capturer_templates(logger, window, overlay: Overlay, templates: List[Dict[st
         index += 1
         if index >= len(templates):
             stop_capture = True
-            return False
-        overlay.set_action(templates[index]["description"])
+        else:
+            overlay.set_action(templates[index]["description"])
+        cursor_win.deiconify()
+        return "break"
+
+    cursor_win.bind("<Button-1>", capture_current)
 
     def on_press(key):
         nonlocal stop_capture
@@ -99,7 +100,7 @@ def capturer_templates(logger, window, overlay: Overlay, templates: List[Dict[st
     overlay.set_action(templates[index]["description"])
     overlay.root.after(0, update_cursor)
 
-    with mouse.Listener(on_click=on_click) as listener, pynput_keyboard.Listener(on_press=on_press):
+    with pynput_keyboard.Listener(on_press=on_press):
         while not stop_capture:
             time.sleep(0.1)
 
