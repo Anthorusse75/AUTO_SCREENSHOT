@@ -174,19 +174,33 @@ def detecter_rectangles_defaite(logger, screenshot_cv):
     logger.info(f"{len(rectangles)} rectangles de défaite détectés")
     return rectangles
 
-def grouper_combats_par_colonne(combats, tolerance=80):
-    """Regroupe les combats par colonne en fonction de leur position."""
+def grouper_combats_par_colonne(combats, tolerance=None):
+    """Regroupe les combats par colonne en fonction de leur abscisse."""
+
+    if not combats:
+        return []
+
+    positions = sorted(c["bbox"][0] for c in combats)
+    if tolerance is None:
+        diffs = [b - a for a, b in zip(positions, positions[1:])]
+        if diffs:
+            median = sorted(diffs)[len(diffs) // 2]
+            tolerance = max(20, int(median * 0.5))
+        else:
+            tolerance = 80
+
     colonnes = []
     combats_tries = sorted(combats, key=lambda c: c["bbox"][0])
     for combat in combats_tries:
         placed = False
         for col in colonnes:
-            if abs(combat["bbox"][0] - col["x"]) < tolerance:
+            if abs(combat["bbox"][0] - col["x"]) <= tolerance:
                 col["combats"].append(combat)
                 placed = True
                 break
         if not placed:
             colonnes.append({"x": combat["bbox"][0], "combats": [combat]})
+
     for col in colonnes:
         col["combats"].sort(key=lambda c: c["bbox"][1])
     return colonnes

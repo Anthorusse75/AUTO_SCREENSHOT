@@ -21,18 +21,32 @@ def extraire_dates_image(path: str) -> List[Dict[str, int]]:
     return dates
 
 
-def grouper_par_colonne(dates: List[Dict[str, int]], tolerance: int = 60):
+def grouper_par_colonne(dates: List[Dict[str, int]], tolerance: int | None = None):
     """Regroupe les dates par colonne selon leur abscisse."""
+
+    if not dates:
+        return []
+
+    positions = sorted(d["x"] for d in dates)
+    if tolerance is None:
+        diffs = [b - a for a, b in zip(positions, positions[1:])]
+        if diffs:
+            median = sorted(diffs)[len(diffs) // 2]
+            tolerance = max(20, int(median * 0.5))
+        else:
+            tolerance = 60
+
     colonnes: List[Dict[str, List[Dict[str, int]]]] = []
     for d in sorted(dates, key=lambda d: d["x"]):
         placed = False
         for col in colonnes:
-            if abs(d["x"] - col["x"]) < tolerance:
+            if abs(d["x"] - col["x"]) <= tolerance:
                 col["dates"].append(d)
                 placed = True
                 break
         if not placed:
             colonnes.append({"x": d["x"], "dates": [d]})
+
     for col in colonnes:
         col["dates"].sort(key=lambda d: d["y"])
     return colonnes
