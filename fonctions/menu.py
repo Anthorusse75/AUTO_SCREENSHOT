@@ -1,8 +1,11 @@
+import os
+import time
 import keyboard
 import pymsgbox
 
 from configuration.log_config import toggle_debug
 from fonctions.overlay import Overlay
+from fonctions.template_recorder import capturer_templates
 
 from fonctions.detection_page import detecter_page_actuelle
 from fonctions.calendrier_du_championnat.Fonctions_detection_Combats import traiter_tous_les_combats
@@ -52,8 +55,36 @@ def boucle_principale(logger, window, overlay: Overlay):
     keyboard.add_hotkey('f1', lambda: afficher_aide(logger))
     overlay.set_phase("En attente")
     keyboard.add_hotkey('f3', lambda: lancer_capture(logger, window, overlay))
+    keyboard.add_hotkey('f12', lambda: lancer_recapture(logger, window, overlay))
     keyboard.add_hotkey('f8', lambda: overlay.toggle())
     keyboard.add_hotkey('f9', lambda: toggle_debug(logger))
-    keyboard.wait('esc')
+    running = True
+
+    def stop_program():
+        nonlocal running
+        running = False
+
+    keyboard.add_hotkey('esc', stop_program)
+
+    while running:
+        time.sleep(0.1)
+
     logger.info("🚪 Touche ESC détectée : arrêt du programme.")
     overlay.stop()
+
+def lancer_recapture(logger, window, overlay: Overlay):
+    templates = [
+        {
+            "path": os.path.join("templates", "calendrier_du_championnat", "victoire_cdc.png"),
+            "description": "Victoire CDC",
+        },
+        {
+            "path": os.path.join("templates", "calendrier_du_championnat", "egalite_cdc.png"),
+            "description": "Egalite CDC",
+        },
+        {
+            "path": os.path.join("templates", "calendrier_du_championnat", "defaite_cdc.png"),
+            "description": "Defaite CDC",
+        },
+    ]
+    capturer_templates(logger, window, overlay, templates)
