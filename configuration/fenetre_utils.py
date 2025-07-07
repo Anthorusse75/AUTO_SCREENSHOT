@@ -137,26 +137,34 @@ def cliquer_coordonnees(logger, window, x_local, y_local):
     pyautogui.click(x, y)
 
 def repositionner_fenetre_si_necessaire(window, logger):
-    """Replace la fenêtre si elle est partiellement ou totalement hors écran"""
+    """Place toujours la fenêtre BlueStacks en haut à gauche (0,0)."""
 
     screen_width, screen_height = pyautogui.size()
     margin = 5  # marge de tolérance
 
+    moved = False
+
+    if window.left != 0 or window.top != 0:
+        logger.info("📍 Déplacement de la fenêtre BlueStacks vers l'origine (0,0)")
+        try:
+            window.moveTo(0, 0)
+            moved = True
+        except Exception as e:
+            logger.error(f"❌ Impossible de déplacer la fenêtre : {e}")
+
     x, y = window.left, window.top
     w, h = window.width, window.height
 
-    # Fenêtre totalement hors écran
-    if (x + margin >= screen_width or y + margin >= screen_height
-            or x + w <= 0 or y + h <= 0):
-        logger.warning("🧭 Fenêtre totalement hors écran : repositionnement forcé.")
+    if (
+        x + margin >= screen_width
+        or y + margin >= screen_height
+        or x + w <= 0
+        or y + h <= 0
+    ):
+        logger.warning("🧭 Fenêtre hors écran : repositionnement forcé.")
         window.moveTo(0, 0)
-        return True
+        moved = True
 
-    # Fenêtre partiellement hors écran (tolérance faible)
-    if x < 0 or y < 0 or (x + w) > screen_width or (y + h) > screen_height:
-        logger.warning("🧭 Fenêtre partiellement hors écran : repositionnement.")
-        window.moveTo(0, 0)
-        return True
-
-    logger.debug("✅ Position de la fenêtre correcte.")
-    return False
+    if not moved:
+        logger.debug("✅ Position de la fenêtre correcte.")
+    return moved

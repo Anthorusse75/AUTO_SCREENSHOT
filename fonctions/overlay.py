@@ -80,7 +80,7 @@ class Overlay:
         else:
             self.show()
 
-    def highlight_rectangle(self, bbox, duration=2000, color="lime", width=3):
+    def highlight_rectangle(self, bbox, duration=2000, color="red", width=4):
         """Affiche un rectangle temporaire sur la fenêtre BlueStacks."""
 
         def _show():
@@ -110,6 +110,7 @@ class Overlay:
             win.geometry(
                 f"{self.window.width}x{self.window.height}+{self.window.left}+{self.window.top}"
             )
+            win.lift()
             win.after(duration, win.destroy)
 
         self.root.after(0, _show)

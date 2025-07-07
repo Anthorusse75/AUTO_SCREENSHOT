@@ -174,6 +174,23 @@ def detecter_rectangles_defaite(logger, screenshot_cv):
     logger.info(f"{len(rectangles)} rectangles de défaite détectés")
     return rectangles
 
+def grouper_combats_par_colonne(combats, tolerance=80):
+    """Regroupe les combats par colonne en fonction de leur position."""
+    colonnes = []
+    combats_tries = sorted(combats, key=lambda c: c["bbox"][0])
+    for combat in combats_tries:
+        placed = False
+        for col in colonnes:
+            if abs(combat["bbox"][0] - col["x"]) < tolerance:
+                col["combats"].append(combat)
+                placed = True
+                break
+        if not placed:
+            colonnes.append({"x": combat["bbox"][0], "combats": [combat]})
+    for col in colonnes:
+        col["combats"].sort(key=lambda c: c["bbox"][1])
+    return colonnes
+
 def debug_detection_combats(logger, window, overlay, pause=2.0):
     """Affiche chaque combat détecté via un cadre overlay pour debug."""
     logger.info("Démarrage du debug de détection des combats")
@@ -185,19 +202,26 @@ def debug_detection_combats(logger, window, overlay, pause=2.0):
         overlay.root.after(int(pause * 1000), lambda: overlay.set_action(""))
         return
 
+    colonnes = grouper_combats_par_colonne(combats)
     overlay.set_phase("Debug combats")
 
-    def afficher(index=0):
-        if index >= len(combats):
+    def afficher(col=0, idx=0):
+        if col >= len(colonnes):
             overlay.set_phase("En attente")
             overlay.set_action("")
             return
 
-        combat = combats[index]
-        overlay.set_action(f"Combat {combat['id']} ({combat['type']})")
-        bbox = combat.get("bbox")
-        overlay.highlight_rectangle(bbox, duration=int(pause * 1000))
-        overlay.root.after(int(pause * 1000), lambda: afficher(index + 1))
+        courant = colonnes[col]["combats"]
+        if idx >= len(courant):
+            overlay.root.after(int(pause * 1000), lambda: afficher(col + 1, 0))
+            return
+
+        combat = courant[idx]
+        overlay.set_action(
+            f"Col {col + 1} - combat {combat['id']} ({combat['type']})"
+        )
+        overlay.highlight_rectangle(combat.get("bbox"), duration=int(pause * 1000))
+        overlay.root.after(int(pause * 1000), lambda: afficher(col, idx + 1))
 
     overlay.root.after(0, lambda: afficher())
 
