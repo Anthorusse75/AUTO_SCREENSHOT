@@ -18,7 +18,8 @@ def capturer_templates(logger, window, overlay: Overlay, templates: List[Dict[st
     ``description``. Les captures sont réalisées aux dimensions du premier
     fichier existant de la liste. L'utilisateur doit maintenir la touche CTRL et
     cliquer avec le bouton gauche pour prendre la capture à la position de la
-    souris. Appuyer sur ESC interrompt la séquence.
+    souris. Appuyer sur ``p`` passe au template suivant sans capture. Appuyer sur
+    ESC interrompt la séquence.
     """
     if not templates:
         logger.warning("Aucun template à capturer")
@@ -78,10 +79,20 @@ def capturer_templates(logger, window, overlay: Overlay, templates: List[Dict[st
     cursor_win.bind("<Button-1>", capture_current)
 
     def on_press(key):
-        nonlocal stop_capture
+        nonlocal stop_capture, index
         if key == pynput_keyboard.Key.esc:
             stop_capture = True
             return False
+        try:
+            if key.char and key.char.lower() == 'p':
+                logger.info("Template ignoré")
+                index += 1
+                if index >= len(templates):
+                    stop_capture = True
+                else:
+                    overlay.set_action(templates[index]["description"])
+        except AttributeError:
+            pass
 
     def update_cursor():
         if stop_capture:
