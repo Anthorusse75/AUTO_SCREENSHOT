@@ -21,7 +21,11 @@ def detecter_combats(logger, window):
     tandis que les défaites sont détectées à partir des quatre bords du
     rectangle (def_haute, def_bas, def_gauche, def_droite).
 
-    Retourne une liste de dicts : { 'id': int, 'coord': (x, y), 'type': str, 'clicked': False }
+    Retourne une liste de dicts contenant au minimum :
+        - ``id``: identifiant séquentiel
+        - ``coord``: centre du combat (x, y)
+        - ``bbox``: rectangle complet (left, top, width, height)
+        - ``type``: victoire/defaite/egalite
     """
     logger.debug("Début de la détection des combats")
     templates = {
@@ -58,11 +62,18 @@ def detecter_combats(logger, window):
             patch_hash = get_patch_hash(screenshot_cv, pt, template.shape)
             if patch_hash in [c['hash'] for c in combats]:
                 continue  # déjà détecté dans cette passe
+            bbox = (
+                window.left + pt[0],
+                window.top + pt[1],
+                template.shape[1],
+                template.shape[0],
+            )
             combats.append({
                 'id': len(combats) + 1,
-                'coord': (window.left + pt[0] + template.shape[1] // 2, window.top + pt[1] + template.shape[0] // 2),
+                'coord': (bbox[0] + bbox[2] // 2, bbox[1] + bbox[3] // 2),
                 'type': type_resultat,
                 'hash': patch_hash,
+                'bbox': bbox,
             })
 
     # Détection des rectangles de défaite via les bords
@@ -78,11 +89,18 @@ def detecter_combats(logger, window):
         patch_hash = get_patch_hash_center(screenshot_cv, center)
         if patch_hash in [c['hash'] for c in combats]:
             continue
+        bbox = (
+            window.left + rect["x_gauche"],
+            window.top + rect["y_haute"],
+            rect["x_droite"] - rect["x_gauche"],
+            rect["y_basse"] - rect["y_haute"],
+        )
         combats.append({
             'id': len(combats) + 1,
-            'coord': (window.left + center[0], window.top + center[1]),
+            'coord': (bbox[0] + bbox[2] // 2, bbox[1] + bbox[3] // 2),
             'type': 'defaite',
             'hash': patch_hash,
+            'bbox': bbox,
         })
     logger.info(f"{len(combats)} combats détectés à l'écran (victoire/défaite/égalité).")
     return combats
@@ -155,6 +173,33 @@ def detecter_rectangles_defaite(logger, screenshot_cv):
                 break
     logger.info(f"{len(rectangles)} rectangles de défaite détectés")
     return rectangles
+
+def debug_detection_combats(logger, window, overlay, pause=2.0):
+    """Affiche chaque combat détecté via un cadre overlay pour debug."""
+    logger.info("Démarrage du debug de détection des combats")
+    combats = detecter_combats(logger, window)
+    logger.info(f"{len(combats)} combats trouvés pour le debug")
+    if not combats:
+        overlay.set_phase("En attente")
+        overlay.set_action("Aucun combat")
+        overlay.root.after(int(pause * 1000), lambda: overlay.set_action(""))
+        return
+
+    overlay.set_phase("Debug combats")
+
+    def afficher(index=0):
+        if index >= len(combats):
+            overlay.set_phase("En attente")
+            overlay.set_action("")
+            return
+
+        combat = combats[index]
+        overlay.set_action(f"Combat {combat['id']} ({combat['type']})")
+        bbox = combat.get("bbox")
+        overlay.highlight_rectangle(bbox, duration=int(pause * 1000))
+        overlay.root.after(int(pause * 1000), lambda: afficher(index + 1))
+
+    overlay.root.after(0, lambda: afficher())
 
 # --- 2. Fonction de clic générique ---
 def cliquer_sur_coord(logger, coord):

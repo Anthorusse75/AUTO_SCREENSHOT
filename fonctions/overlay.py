@@ -79,3 +79,37 @@ class Overlay:
             self.hide()
         else:
             self.show()
+
+    def highlight_rectangle(self, bbox, duration=2000, color="lime", width=3):
+        """Affiche un rectangle temporaire sur la fenêtre BlueStacks."""
+
+        def _show():
+            win = tk.Toplevel(self.root)
+            win.overrideredirect(True)
+            win.attributes("-topmost", True)
+            win.attributes("-transparentcolor", "magenta")
+            win.configure(bg="magenta")
+            canvas = tk.Canvas(
+                win,
+                width=self.window.width,
+                height=self.window.height,
+                highlightthickness=0,
+                bg="magenta",
+            )
+            canvas.pack()
+            left = bbox[0] - self.window.left
+            top = bbox[1] - self.window.top
+            canvas.create_rectangle(
+                left,
+                top,
+                left + bbox[2],
+                top + bbox[3],
+                outline=color,
+                width=width,
+            )
+            win.geometry(
+                f"{self.window.width}x{self.window.height}+{self.window.left}+{self.window.top}"
+            )
+            win.after(duration, win.destroy)
+
+        self.root.after(0, _show)
