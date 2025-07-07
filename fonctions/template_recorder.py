@@ -6,7 +6,7 @@ from typing import List, Dict
 import keyboard as kb
 import pyautogui
 from PIL import Image
-from pynput import keyboard as pynput_keyboard
+from pynput import keyboard as pynput_keyboard, mouse as pynput_mouse
 import tkinter as tk
 
 from fonctions.overlay import Overlay
@@ -18,8 +18,8 @@ def capturer_templates(logger, window, overlay: Overlay, templates: List[Dict[st
     Chaque élément de ``templates`` doit être un dict avec les clés ``path`` et
     ``description``. Les captures sont réalisées aux dimensions du premier
     fichier existant de la liste. L'utilisateur doit maintenir la touche CTRL et
-    cliquer avec le bouton gauche pour prendre la capture à la position de la
-    souris. Appuyer sur ``p`` passe au template suivant sans capture. Appuyer sur
+    cliquer **droit** pour prendre la capture à la position de la souris.
+    Appuyer sur ``p`` passe au template suivant sans capture. Appuyer sur
     ESC interrompt la séquence.
     """
     if not templates:
@@ -36,7 +36,7 @@ def capturer_templates(logger, window, overlay: Overlay, templates: List[Dict[st
     if width is None:
         width, height = 100, 100
 
-    overlay.set_phase("Capture templates")
+    overlay.set_phase("Capture templates (CTRL + clic droit)")
     index = 0
     stop_capture = False
 
@@ -91,7 +91,15 @@ def capturer_templates(logger, window, overlay: Overlay, templates: List[Dict[st
             overlay.set_action(templates[index]["description"])
         return "break"
 
-    overlay.root.after(0, lambda: cursor_win.bind("<Button-1>", capture_current))
+    # La capture est déclenchée par un clic droit global lorsque CTRL est enfoncé
+    def on_click(x, y, button, pressed):
+        if (
+            pressed
+            and button == pynput_mouse.Button.right
+            and kb.is_pressed("ctrl")
+        ):
+            capture_current()
+
 
     def on_press(key):
         nonlocal stop_capture, index
@@ -136,7 +144,8 @@ def capturer_templates(logger, window, overlay: Overlay, templates: List[Dict[st
     overlay.set_action(templates[index]["description"])
     overlay.root.after(0, update_cursor)
 
-    with pynput_keyboard.Listener(on_press=on_press):
+    with pynput_keyboard.Listener(on_press=on_press) as key_listener, \
+            pynput_mouse.Listener(on_click=on_click) as mouse_listener:
         while not stop_capture:
             time.sleep(0.1)
 

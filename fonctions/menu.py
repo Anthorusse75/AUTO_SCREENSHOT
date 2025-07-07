@@ -21,6 +21,7 @@ def afficher_aide(logger=None):
         "F12 : Reprendre les templates manuellement\n"
         "F9 : Basculer le mode debug\n"
         "F8 : Afficher/Masquer l'overlay\n"
+        "CTRL + Clic droit : Capturer le template\n"
         "P : Passer le template courant\n"
         "ESC : Quitter le programme"
     )
@@ -52,7 +53,7 @@ def lancer_capture(logger, window, overlay: Overlay):
 def boucle_principale(logger, window, overlay: Overlay):
     """Boucle d'attente principale pour les raccourcis clavier."""
     logger.info(
-        "⌨️  Appuyez sur F1 pour l'aide, F3 pour lancer la capture, F12 pour la recapture, F9 pour le debug, ESC pour quitter."
+        "⌨️  Appuyez sur F1 pour l'aide, F3 pour lancer la capture, F12 pour la recapture (CTRL + clic droit), F9 pour le debug, ESC pour quitter."
     )
     keyboard.add_hotkey('f1', lambda: afficher_aide(logger))
     overlay.set_phase("En attente")
