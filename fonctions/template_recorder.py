@@ -6,6 +6,7 @@ import keyboard as kb
 import pyautogui
 from PIL import Image
 from pynput import mouse, keyboard as pynput_keyboard
+import tkinter as tk
 
 from fonctions.overlay import Overlay
 
@@ -37,6 +38,21 @@ def capturer_templates(logger, window, overlay: Overlay, templates: List[Dict[st
     index = 0
     stop_capture = False
 
+    # Petite fenêtre affichant le cadre de capture lorsque CTRL est maintenu
+    def create_cursor_window():
+        win = tk.Toplevel(overlay.root)
+        win.overrideredirect(True)
+        win.attributes("-topmost", True)
+        win.attributes("-transparentcolor", "magenta")
+        win.configure(bg="magenta")
+        canvas = tk.Canvas(win, width=width, height=height, highlightthickness=0, bg="magenta")
+        canvas.pack()
+        canvas.create_rectangle(0, 0, width - 1, height - 1, outline="red", width=2)
+        win.withdraw()
+        return win
+
+    cursor_win = create_cursor_window()
+
     def on_click(x, y, button, pressed):
         nonlocal index, stop_capture
         if stop_capture:
@@ -66,10 +82,27 @@ def capturer_templates(logger, window, overlay: Overlay, templates: List[Dict[st
             stop_capture = True
             return False
 
+    def update_cursor():
+        if stop_capture:
+            cursor_win.withdraw()
+            return
+        if kb.is_pressed('ctrl'):
+            x, y = pyautogui.position()
+            left = int(x - width / 2)
+            top = int(y - height / 2)
+            cursor_win.geometry(f"{width}x{height}+{left}+{top}")
+            cursor_win.deiconify()
+        else:
+            cursor_win.withdraw()
+        overlay.root.after(30, update_cursor)
+
     overlay.set_action(templates[index]["description"])
+    overlay.root.after(0, update_cursor)
+
     with mouse.Listener(on_click=on_click) as listener, pynput_keyboard.Listener(on_press=on_press):
         while not stop_capture:
             time.sleep(0.1)
 
     overlay.set_phase("En attente")
     overlay.set_action("")
+    overlay.root.after(0, cursor_win.destroy)
