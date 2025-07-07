@@ -52,7 +52,9 @@ def detecter_combats(logger, window):
         min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
         logger.info(f"{type_resultat}: max_val={max_val:.3f} at {max_loc}")
 
-        loc = np.where(result >= COMBAT_MATCH_THRESHOLD)
+        # Ajuste dynamiquement le seuil en fonction du meilleur score
+        dyn_threshold = max(COMBAT_MATCH_THRESHOLD, max_val * 0.9)
+        loc = np.where(result >= dyn_threshold)
 
         for pt in zip(*loc[::-1]):
             # Évite les doublons proches (non-max suppression simplifiée)

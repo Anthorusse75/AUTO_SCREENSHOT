@@ -33,7 +33,7 @@ def initialiser_fenetre_bluestacks(logger):
     redimensionner_si_necessaire(window, logger)
 
     # 📍 Repositionner après le redimensionnement
-    repositionner_fenetre_si_necessaire(window, logger)
+    window = repositionner_fenetre_si_necessaire(window, logger)
 
     # 🧾 Vérifier dimensions (log informatif)
     verifier_dimensions(window, logger)
@@ -143,9 +143,21 @@ def repositionner_fenetre_si_necessaire(window, logger):
         if window.left != 0 or window.top != 0:
             logger.info("📍 Déplacement de la fenêtre BlueStacks vers l'origine (0,0)")
             window.moveTo(0, 0)
+            time.sleep(0.3)
+            # Rafraîchit l'objet car pygetwindow ne met pas toujours à jour les coordonnées
+            windows = [w for w in gw.getWindowsWithTitle(window.title) if w.visible]
+            if windows:
+                window = windows[0]
+                if window.left != 0 or window.top != 0:
+                    logger.warning("Deuxième tentative de repositionnement")
+                    window.moveRel(-window.left, -window.top)
+                    time.sleep(0.3)
+                    windows = [w for w in gw.getWindowsWithTitle(window.title) if w.visible]
+                    if windows:
+                        window = windows[0]
         else:
             logger.debug("✅ Fenêtre déjà à l'origine.")
     except Exception as e:
         logger.error(f"❌ Impossible de déplacer la fenêtre : {e}")
-        return False
-    return True
+        return window
+    return window
