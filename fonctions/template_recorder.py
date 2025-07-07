@@ -1,5 +1,6 @@
 import os
 import time
+import threading
 from typing import List, Dict
 
 import keyboard as kb
@@ -39,8 +40,11 @@ def capturer_templates(logger, window, overlay: Overlay, templates: List[Dict[st
     index = 0
     stop_capture = False
 
-    # Petite fenêtre affichant le cadre de capture lorsque CTRL est maintenu
+    cursor_win = None
+    create_event = threading.Event()
+
     def create_cursor_window():
+        nonlocal cursor_win
         win = tk.Toplevel(overlay.root)
         win.overrideredirect(True)
         win.attributes("-topmost", True)
@@ -50,9 +54,11 @@ def capturer_templates(logger, window, overlay: Overlay, templates: List[Dict[st
         canvas.pack()
         canvas.create_rectangle(0, 0, width - 1, height - 1, outline="red", width=2)
         win.withdraw()
-        return win
+        cursor_win = win
+        create_event.set()
 
-    cursor_win = create_cursor_window()
+    overlay.root.after(0, create_cursor_window)
+    create_event.wait()
 
     def capture_current(_event=None):
         nonlocal index, stop_capture
@@ -76,7 +82,7 @@ def capturer_templates(logger, window, overlay: Overlay, templates: List[Dict[st
         cursor_win.deiconify()
         return "break"
 
-    cursor_win.bind("<Button-1>", capture_current)
+    overlay.root.after(0, lambda: cursor_win.bind("<Button-1>", capture_current))
 
     def on_press(key):
         nonlocal stop_capture, index
