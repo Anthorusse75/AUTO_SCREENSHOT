@@ -3,7 +3,7 @@ import tkinter as tk
 class Overlay:
     """Petite fenêtre superposée indiquant l'état courant."""
 
-    def __init__(self, window, width=240, height=60):
+    def __init__(self, window, width=360, height=60):
         self.window = window
         self.width = width
         self.height = height
@@ -19,8 +19,27 @@ class Overlay:
 
         frame = tk.Frame(self.root, bg="black")
         frame.pack(fill="both", expand=True)
-        tk.Label(frame, textvariable=self.phase_var, fg="white", bg="black", font=("Arial", 12, "bold")).pack(fill="x", padx=5, pady=(4, 0))
-        tk.Label(frame, textvariable=self.action_var, fg="white", bg="black", font=("Arial", 10)).pack(fill="x", padx=5, pady=(0, 4))
+        wrap = self.width - 10
+        tk.Label(frame,
+                 textvariable=self.phase_var,
+                 fg="white",
+                 bg="black",
+                 font=("Arial", 12, "bold"),
+                 anchor="w",
+                 justify="left",
+                 wraplength=wrap).pack(fill="x", padx=5, pady=(4, 0))
+        tk.Label(frame,
+                 textvariable=self.action_var,
+                 fg="white",
+                 bg="black",
+                 font=("Arial", 10),
+                 anchor="w",
+                 justify="left",
+                 wraplength=wrap).pack(fill="x", padx=5, pady=(0, 4))
+
+        # Ajuste la hauteur pour s'adapter au contenu si nécessaire
+        self.root.update_idletasks()
+        self.height = max(self.height, frame.winfo_height())
 
         self.update_position()
 
