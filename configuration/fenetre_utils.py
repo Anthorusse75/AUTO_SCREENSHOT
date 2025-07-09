@@ -135,6 +135,7 @@ def cliquer_coordonnees(logger, window, x_local, y_local):
     x, y = ajuster_coordonnees(window, x_local, y_local)
     logger.debug(f"🖱 Clique à {x}, {y}")
     pyautogui.click(x, y)
+    time.sleep(2.0)  # Laisse le temps à la page de se charger
 
 def repositionner_fenetre_si_necessaire(window, logger):
     """Place toujours la fenêtre BlueStacks en haut à gauche (0,0)."""

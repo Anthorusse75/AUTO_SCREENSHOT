@@ -1,4 +1,5 @@
 import os
+import time
 import cv2
 import numpy as np
 import pyautogui
@@ -549,6 +550,7 @@ def cliquer_croix_sortie_JGG(logger, window):
     y = window.top + max_loc[1] + template.shape[0] // 2
     logger.info(f"Clique sur la croix de sortie JGG à {x},{y}")
     pyautogui.click(x, y)
+    time.sleep(0.5)  # Court délai pour la fermeture de la fenêtre
     return True
 
 # --- 4. Fonction principale d'automatisation ---
@@ -568,13 +570,13 @@ def traiter_tous_les_combats(logger, window):
 
         for combat in combats_a_traiter:
             cliquer_sur_coord(logger, combat['coord'])
-            pyautogui.sleep(1.5)  # Laisse le temps à la page de charger
+            pyautogui.sleep(2.0)  # Laisse le temps à la page de charger
 
             # Vérifie si on est bien sur la page JGG
             page = detecter_page_actuelle(logger, window)
             if page and page.get("page") == "journal_de_guerre_de_guildes":
                 cliquer_croix_sortie_JGG(logger, window)
-                pyautogui.sleep(1.5)
+                pyautogui.sleep(2.0)
                 # Vérifie retour au calendrier
                 page = detecter_page_actuelle(logger, window)
                 if page and page.get("page") == "calendrier_du_championnat":
