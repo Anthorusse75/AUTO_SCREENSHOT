@@ -115,7 +115,7 @@ def focus_fenetre_bluestacks(window) -> None:
 
 
 def swipe_vertical(x: int, y_start: int, y_end: int,
-                   duration: float = 1.2,
+                   duration: float = SWIPE_DURATION,
                    logger=None, label: str = "swipe") -> None:
     """
     Swipe Android fiable :
@@ -335,17 +335,19 @@ def detecter_fin_scroll_bas(logger, screenshot_cv) -> bool:
 #  Gestes « scroll » (swipe vertical)                                         #
 # --------------------------------------------------------------------------- #
 
-SWIPE_DISTANCE = 600  # px – plus fiable qu'un drag de 350 px
-SWIPE_DURATION = 0.8  # s – assez lent pour être reconnu par Android
+SWIPE_DISTANCE = 780               # px
+SWIPE_DURATION = 0.55              # s
 
 # --------------------------------------------------------------------------- #
 #  Paramètres géométrie d’un bloc combat (à placer avec les autres constantes)
 # --------------------------------------------------------------------------- #
-PANEL_X1 = 265          # bord gauche réellement à l’intérieur du panneau brun
-PANEL_X2 = 1315         # juste avant la bordure dorée
+PANEL_X1 = 250                # bord gauche « brun »
+PANEL_X2 = 1340               # juste avant la colonne barre dorée
 ROW_X1, ROW_X2 = PANEL_X1, PANEL_X2
-ROW_UP, ROW_DOWN = 75, 60
+ROW_UP, ROW_DOWN = 80, 65     # englobe la ligne « Position : n »
 ROW_W, ROW_H = ROW_X2 - ROW_X1, ROW_UP + ROW_DOWN
+
+SWIPE_X = (ROW_X1 + ROW_X2) // 2   # trajectoire pile au centre du tableau
 
 
 def scroll_tactile_vers_haut(
@@ -359,7 +361,7 @@ def scroll_tactile_vers_haut(
     """
     Swipe vertical du bas vers le haut pour faire défiler la liste vers le haut.
     """
-    x = window.left + WINDOW_WIDTH // 2
+    x = window.left + SWIPE_X
     y_start = window.top + WINDOW_HEIGHT // 2 + distance // 2
 
     for _ in range(repetitions):
@@ -388,7 +390,7 @@ def scroll_tactile_vers_bas(
     """
     Swipe vertical du haut vers le bas pour faire défiler la liste vers le bas.
     """
-    x = window.left + WINDOW_WIDTH // 2
+    x = window.left + SWIPE_X
     y_start = window.top + WINDOW_HEIGHT // 2 - distance // 2
 
     for _ in range(repetitions):
@@ -499,7 +501,7 @@ def parcourir_journal_complet(
         for px, py in nouvelles:
             y1 = max(py - ROW_UP, 0)
             y2 = min(py + ROW_DOWN, screenshot_cv.shape[0])
-            blocs.append((ROW_X1 + 1, y1, ROW_X2 - 1, y2, 1.0))  # score fictif 1.0
+            blocs.append((ROW_X1 + 2, y1, ROW_X2 - 2, y2, 1.0))  # score fictif 1.0
         _save_debug(np.array(screenshot)[:, :, ::-1], blocs, debug_idx)
         debug_idx += 1
         ################################
