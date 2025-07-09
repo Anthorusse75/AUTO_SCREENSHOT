@@ -1,383 +1,595 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
-Fonctions pour analyser et parcourir les journaux de guerre de guildes.
+analyser_journaux_guerre_guildes.py
+
+Fonctions pour analyser et parcourir les journaux de guerre de guildes
+dans BlueStacks/Summoners War. La logique a été revue pour garantir un
+scroll 100 % fiable via gestes tactiles simulés (swipe vertical), car
+la molette Windows est souvent ignorée par BlueStacks.
+
+Principales améliorations
+-------------------------
+- Focus fenêtre : restore + activate pour éviter le « scroll dans le vide ».
+- Swipe vertical : dx = 0, distance 600 px, durée 0.8 s (naturel pour Android).
+- Option fallback ADB (HD-Adb.exe) si PyAutoGUI reste inopérant.
+- Logs détaillés (Niveau DEBUG) pour chaque test de template et swipe.
+- Détection de fin de scroll : template + fallback luminosité.
 """
+
+from __future__ import annotations
+
 import os
 import time
+import subprocess
+from typing import List, Tuple, Optional
+
 import cv2
 import numpy as np
 import pyautogui
 
+# --------------------------------------------------------------------------- #
+#  Tout en haut du fichier – juste après les imports existants
+# --------------------------------------------------------------------------- #
+import shutil                 #  <-- déjà peut-être importé plus bas ? sinon ajoute
+### DEBUG SCREENSHOTS ##############################################
+DIR_LOG = "LOG_SCREENSHOTS"
+
+import datetime, tempfile
+
+def _init_log_dir(logger):
+    """
+    • Si LOG_SCREENSHOTS/ est encore verrouillé, on le renomme en
+      LOG_SCREENSHOTS_old_<horodatage>/ plutôt que d’échouer.
+    • Puis on (re)crée LOG_SCREENSHOTS/.
+    """
+    ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    if os.path.isdir(DIR_LOG):
+        try:
+            shutil.rmtree(DIR_LOG)
+        except PermissionError:
+            alt = f"{DIR_LOG}_old_{ts}"
+            logger.warning(f"[DEBUG] {DIR_LOG} verrouillé → renommage → {alt}")
+            try:
+                os.rename(DIR_LOG, alt)
+            except Exception as e:
+                logger.error(f"Impossible de renommer {DIR_LOG}: {e}")
+    os.makedirs(DIR_LOG, exist_ok=True)
+    logger.debug(f"[DEBUG] Dossier {DIR_LOG}/ prêt")
+
+def _save_debug(bgr_img, rects, idx):
+    """
+    Sauvegarde un screenshot annoté dans LOG_SCREENSHOTS/.
+    rects = [(x1, y1, x2, y2, score_float), ...]
+    """
+    img = bgr_img.copy()
+    for x1, y1, x2, y2, score in rects:
+        cv2.rectangle(img, (x1, y1), (x2, y2), (0, 255, 255), 2)
+        label = f"{int(score*100):02d}%"
+        cv2.rectangle(img, (x1, y1 - 22), (x1 + 38, y1), (0, 0, 0), -1)
+        cv2.putText(img, label, (x1 + 2, y1 - 5),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1,
+                    cv2.LINE_AA)
+    cv2.imwrite(f"{DIR_LOG}/{idx:03d}.png", img)
+####################################################################
+
+# --------------------------------------------------------------------------- #
+#  Imports internes (vos propres modules / constantes)                        #
+# --------------------------------------------------------------------------- #
 from configuration.config import (
     WINDOW_WIDTH,
     WINDOW_HEIGHT,
-    TEMPLATES_PAGES_DIR,
+    TEMPLATES_PAGES_DIR,     # <– laissé pour compatibilité si utilisé ailleurs
     TAB_MATCH_THRESHOLD,
     LIMIT_MATCH_THRESHOLD,
-    PAGE_MATCH_THRESHOLD
+    PAGE_MATCH_THRESHOLD,
 )
-from fonctions.detection_page import charger_image_cv2, detecter_onglet_actif, detecter_limites_scroll
+from fonctions.detection_page import (
+    charger_image_cv2,
+    detecter_onglet_actif,   # peut servir hors de ce module
+    detecter_limites_scroll, # idem
+)
 from configuration.fenetre_utils import cliquer_coordonnees
 
+# --------------------------------------------------------------------------- #
+#  Helpers fenêtre et gestes                                                 #
+# --------------------------------------------------------------------------- #
 
-def detecter_onglet_journal_attaque(logger, screenshot_cv):
-    """Détecte si on est sur l'onglet 'Journal d'attaque'."""
+def focus_fenetre_bluestacks(window) -> None:
+    """
+    Donne *réellement* le focus à la fenêtre BlueStacks.
+
+    - Si la fenêtre est minimisée, on la restaure avant d'appeler .activate().
+    - On met un petit sleep pour laisser le temps à Windows de réagir.
+    """
+    try:
+        import pygetwindow as gw
+
+        win = gw.getWindowsWithTitle(window.title)[0]
+        if win.isMinimized:
+            win.restore()
+        win.activate()
+        time.sleep(0.3)
+    except Exception as e:
+        # On loggue en stdout car le logger n'est pas forcément dispo ici
+        print(f"[WARN] Impossible de focus la fenêtre BlueStacks : {e}")
+        time.sleep(0.3)
+
+
+def swipe_vertical(x: int, y_start: int, y_end: int,
+                   duration: float = 1.2,
+                   logger=None, label: str = "swipe") -> None:
+    """
+    Swipe Android fiable :
+    1. micro-nudge (-2,-2) → réveille l’input
+    2. mouseDown
+    3. dragRel(dx=10, dy, duration)
+    """
+    dy = y_end - y_start
+    if logger:
+        logger.debug(f"🖱️ {label} start=({x},{y_start}) dy={dy} dur={duration:.1f}s")
+
+    pyautogui.moveTo(x - 2, y_start - 2, _pause=False)   # nudge
+    pyautogui.moveTo(x, y_start, _pause=False)
+    pyautogui.mouseDown()
+    pyautogui.dragRel(10, dy, duration=duration, button='left', _pause=False)
+    pyautogui.mouseUp()
+
+
+def swipe_adb(
+    x: int,
+    y_start: int,
+    y_end: int,
+    duration_ms: int = 500,
+    logger=None,
+) -> None:
+    """
+    Fallback : swipe via ADB interne BlueStacks (HD-Adb.exe).
+    Très fiable si PyAutoGUI échoue (capture VNC directement par Android).
+
+    duration_ms : durée du swipe côté Android.
+    """
+    cmd = [
+        "HD-Adb.exe",
+        "shell",
+        "input",
+        "swipe",
+        str(x),
+        str(y_start),
+        str(x),
+        str(y_end),
+        str(duration_ms),
+    ]
+    if logger:
+        logger.debug("⏯️  Exécution commande ADB : " + " ".join(cmd))
+    subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+# --------------------------------------------------------------------------- #
+#  Détection onglets et limites de scroll                                     #
+# --------------------------------------------------------------------------- #
+
+def detecter_onglet_journal_attaque(logger, screenshot_cv) -> bool:
+    """Retourne True si le tab *Journal d'attaque* est actif."""
     template_path = "templates/journal_de_guerre_de_guildes/onglets/journal_d_attaque.png"
-    
     if not os.path.exists(template_path):
-        logger.warning(f"Template journal d'attaque non trouvé : {template_path}")
+        logger.warning(f"Template onglet attaque introuvable : {template_path}")
         return False
-    
+
     template = charger_image_cv2(template_path)
     if template is None:
         logger.error(f"Impossible de charger le template : {template_path}")
         return False
-    
+
     result = cv2.matchTemplate(screenshot_cv, template, cv2.TM_CCOEFF_NORMED)
     _, max_val, _, _ = cv2.minMaxLoc(result)
-    
-    logger.debug(f"Score détection onglet attaque : {max_val:.3f}")
+    logger.debug(f"Score onglet attaque : {max_val:.3f}")
     return max_val >= TAB_MATCH_THRESHOLD
 
 
-def detecter_onglet_journal_defense(logger, screenshot_cv):
-    """Détecte si on est sur l'onglet 'Journal de défense'."""
+def detecter_onglet_journal_defense(logger, screenshot_cv) -> bool:
+    """Retourne True si le tab *Journal de défense* est actif."""
     template_path = "templates/journal_de_guerre_de_guildes/onglets/journal_de_defense.png"
-    
     if not os.path.exists(template_path):
-        logger.warning(f"Template journal de défense non trouvé : {template_path}")
+        logger.warning(f"Template onglet défense introuvable : {template_path}")
         return False
-    
+
     template = charger_image_cv2(template_path)
     if template is None:
         logger.error(f"Impossible de charger le template : {template_path}")
         return False
-    
+
     result = cv2.matchTemplate(screenshot_cv, template, cv2.TM_CCOEFF_NORMED)
     _, max_val, _, _ = cv2.minMaxLoc(result)
-    
-    logger.debug(f"Score détection onglet défense : {max_val:.3f}")
+    logger.debug(f"Score onglet défense : {max_val:.3f}")
     return max_val >= TAB_MATCH_THRESHOLD
 
 
-def detecter_bouton_journal_defense(logger, screenshot_cv):
-    """Détecte et retourne la position du bouton pour basculer vers journal de défense."""
+def detecter_bouton_journal_defense(logger, screenshot_cv) -> Optional[Tuple[int, int]]:
+    """
+    Détecte le bouton *Journal de défense* et renvoie son centre (x, y).
+    Retourne None si score < TAB_MATCH_THRESHOLD.
+    """
     template_path = "templates/journal_de_guerre_de_guildes/onglets/bouton_journal_defense.png"
-    
     if not os.path.exists(template_path):
-        logger.warning(f"Template bouton défense non trouvé : {template_path}")
+        logger.warning(f"Template bouton défense introuvable : {template_path}")
         return None
-    
+
     template = charger_image_cv2(template_path)
     if template is None:
         logger.error(f"Impossible de charger le template : {template_path}")
         return None
-    
+
     result = cv2.matchTemplate(screenshot_cv, template, cv2.TM_CCOEFF_NORMED)
     _, max_val, _, max_loc = cv2.minMaxLoc(result)
-    
+    logger.debug(f"Score bouton défense : {max_val:.3f}")
+
     if max_val >= TAB_MATCH_THRESHOLD:
-        # Calcul du centre du bouton
         h, w = template.shape[:2]
-        center_x = max_loc[0] + w // 2
-        center_y = max_loc[1] + h // 2
-        logger.debug(f"Bouton journal défense trouvé à ({center_x}, {center_y}) avec score {max_val:.3f}")
-        return (center_x, center_y)
-    
-    logger.debug(f"Bouton journal défense non trouvé (score : {max_val:.3f})")
+        return (max_loc[0] + w // 2, max_loc[1] + h // 2)
     return None
 
 
-def detecter_informations_combat(logger, screenshot_cv, exclusions=None):
+# --------------------------------------------------------------------------- #
+#  Détection des informations de combat sur l'écran courant                   #
+# --------------------------------------------------------------------------- #
+
+def detecter_informations_combat(
+    logger,
+    screenshot_cv,
+    exclusions: Optional[List[Tuple[int, int]]] = None,
+) -> List[Tuple[int, int]]:
     """
-    Détecte tous les éléments 'informations_combat.png' dans la capture d'écran.
-    
-    Args:
-        logger: Logger pour les messages
-        screenshot_cv: Image de la capture d'écran en OpenCV
-        exclusions: Liste des positions déjà détectées à exclure (format: [(x, y), ...])
-    
-    Returns:
-        Liste des positions trouvées [(x, y), ...]
+    Renvoie toutes les positions (x, y) des icônes *informations_combat*
+    visibles à l'écran, en filtrant les doublons et les coords déjà connues.
     """
     template_path = "templates/journal_de_guerre_de_guildes/informations_combat.png"
-    
     if not os.path.exists(template_path):
-        logger.warning(f"Template informations combat non trouvé : {template_path}")
+        logger.warning(f"Template informations combat introuvable : {template_path}")
         return []
-    
+
     template = charger_image_cv2(template_path)
     if template is None:
         logger.error(f"Impossible de charger le template : {template_path}")
         return []
-    
+
     result = cv2.matchTemplate(screenshot_cv, template, cv2.TM_CCOEFF_NORMED)
     locations = np.where(result >= PAGE_MATCH_THRESHOLD)
-    
+
     if exclusions is None:
         exclusions = []
-    
-    positions = []
+
+    positions: List[Tuple[int, int]] = []
     h, w = template.shape[:2]
-    
-    for pt in zip(*locations[::-1]):  # Conversion (y, x) -> (x, y)
-        center_x = pt[0] + w // 2
-        center_y = pt[1] + h // 2
-        
-        # Vérifier si cette position est trop proche d'une exclusion
-        est_exclue = False
-        for excl_x, excl_y in exclusions:
-            distance = np.sqrt((center_x - excl_x)**2 + (center_y - excl_y)**2)
-            if distance < 50:  # Seuil de 50 pixels pour éviter les doublons
-                est_exclue = True
-                break
-        
-        if not est_exclue:
-            # Vérifier si cette position est trop proche d'une déjà trouvée
-            est_doublon = False
-            for pos_x, pos_y in positions:
-                distance = np.sqrt((center_x - pos_x)**2 + (center_y - pos_y)**2)
-                if distance < 50:
-                    est_doublon = True
-                    break
-            
-            if not est_doublon:
-                positions.append((center_x, center_y))
-    
-    logger.debug(f"Détecté {len(positions)} informations de combat (exclusions: {len(exclusions)})")
+
+    for pt in zip(*locations[::-1]):  # (y, x) -> (x, y)
+        cx, cy = pt[0] + w // 2, pt[1] + h // 2
+
+        # anti-doublon : déjà connu ?
+        if any(np.hypot(cx - ex, cy - ey) < 50 for ex, ey in exclusions):
+            continue
+        if any(np.hypot(cx - px, cy - py) < 50 for px, py in positions):
+            continue
+
+        positions.append((cx, cy))
+
+    logger.debug(
+        f"Détecté {len(positions)} info(s) combat "
+        f"(exclu={len(exclusions)}) sur cette capture"
+    )
     return positions
 
 
-def detecter_fin_scroll_haut(logger, screenshot_cv):
-    """Détecte si on est arrivé en haut du scroll."""
-    template_path = "templates/journal_de_guerre_de_guildes/limites/haut_scroll.png"
-    
-    if not os.path.exists(template_path):
-        logger.debug("Template haut de scroll non trouvé, utilisation de méthode alternative")
-        # Méthode alternative : vérifier s'il y a du contenu très en haut
-        hauteur_verification = 100
-        zone_haut = screenshot_cv[:hauteur_verification, :]
-        return np.mean(zone_haut) > 200  # Zone claire = on est en haut
-    
-    template = charger_image_cv2(template_path)
+# --------------------------------------------------------------------------- #
+#  Détection de fin de scroll (haut / bas)                                    #
+# --------------------------------------------------------------------------- #
+
+def _detecter_fin_scroll(
+    logger,
+    screenshot_cv,
+    template_file: str,
+    zone: str,  # "haut" ou "bas" (pour logs)
+) -> bool:
+    """
+    Renvoie True si la limite de scroll (haut ou bas) est détectée.
+
+    - D'abord on tente la détection par template.
+    - Sinon fallback : luminosité sur 100 px en haut ou bas d'écran.
+    """
+    if not os.path.exists(template_file):
+        logger.debug(f"Template limite {zone} absent, fallback luminosité")
+        slice_ = (
+            screenshot_cv[:100, :] if zone == "haut" else screenshot_cv[-100:, :]
+        )
+        return np.mean(slice_) > 200
+
+    template = charger_image_cv2(template_file)
     if template is None:
         return False
-    
+
     result = cv2.matchTemplate(screenshot_cv, template, cv2.TM_CCOEFF_NORMED)
     _, max_val, _, _ = cv2.minMaxLoc(result)
-    
+    logger.debug(f"Limite {zone} score : {max_val:.3f}")
     return max_val >= LIMIT_MATCH_THRESHOLD
 
 
-def detecter_fin_scroll_bas(logger, screenshot_cv):
-    """Détecte si on est arrivé en bas du scroll."""
-    template_path = "templates/journal_de_guerre_de_guildes/limites/bas_scroll.png"
-    
-    if not os.path.exists(template_path):
-        logger.debug("Template bas de scroll non trouvé, utilisation de méthode alternative")
-        # Méthode alternative : vérifier s'il y a du contenu très en bas
-        hauteur_verification = 100
-        zone_bas = screenshot_cv[-hauteur_verification:, :]
-        return np.mean(zone_bas) > 200  # Zone claire = on est en bas
-    
-    template = charger_image_cv2(template_path)
-    if template is None:
-        return False
-    
-    result = cv2.matchTemplate(screenshot_cv, template, cv2.TM_CCOEFF_NORMED)
-    _, max_val, _, _ = cv2.minMaxLoc(result)
-    
-    return max_val >= LIMIT_MATCH_THRESHOLD
+def detecter_fin_scroll_haut(logger, screenshot_cv) -> bool:
+    """True si l'on est en haut de la liste."""
+    return _detecter_fin_scroll(
+        logger,
+        screenshot_cv,
+        "templates/journal_de_guerre_de_guildes/limites/haut_scroll.png",
+        zone="haut",
+    )
 
 
-def scroller_vers_haut(logger, window, overlay, zone_scroll_center=(WINDOW_WIDTH//2, WINDOW_HEIGHT//2)):
+def detecter_fin_scroll_bas(logger, screenshot_cv) -> bool:
+    """True si l'on est en bas de la liste."""
+    return _detecter_fin_scroll(
+        logger,
+        screenshot_cv,
+        "templates/journal_de_guerre_de_guildes/limites/bas_scroll.png",
+        zone="bas",
+    )
+
+
+# --------------------------------------------------------------------------- #
+#  Gestes « scroll » (swipe vertical)                                         #
+# --------------------------------------------------------------------------- #
+
+SWIPE_DISTANCE = 600  # px – plus fiable qu'un drag de 350 px
+SWIPE_DURATION = 0.8  # s – assez lent pour être reconnu par Android
+
+# --------------------------------------------------------------------------- #
+#  Paramètres géométrie d’un bloc combat (à placer avec les autres constantes)
+# --------------------------------------------------------------------------- #
+ROW_X1, ROW_X2 = 240, 1200   # bords gauche / droit du tableau
+ROW_UP, ROW_DOWN = 60, 50    # px au-dessus / au-dessous du centre du bouton « i »
+ROW_W, ROW_H = ROW_X2 - ROW_X1, ROW_UP + ROW_DOWN
+
+
+def scroll_tactile_vers_haut(
+    logger,
+    window,
+    overlay,
+    distance: int = SWIPE_DISTANCE,
+    duree: float = SWIPE_DURATION,
+    repetitions: int = 1,
+) -> None:
     """
-    Scrolle doucement vers le haut jusqu'à atteindre le début.
-    
-    Args:
-        zone_scroll_center: Centre de la zone de scroll (x, y)
+    Swipe vertical du bas vers le haut pour faire défiler la liste vers le haut.
     """
-    logger.info("📜 Scroll vers le haut en cours...")
-    overlay.set_action("Scroll vers le haut")
-    
-    scroll_attempts = 0
-    max_attempts = 20
-    
-    while scroll_attempts < max_attempts:
-        # Prendre une capture pour vérifier où on en est
-        screenshot = pyautogui.screenshot(region=(window.left, window.top, WINDOW_WIDTH, WINDOW_HEIGHT))
-        screenshot_cv = cv2.cvtColor(np.array(screenshot), cv2.COLOR_RGB2GRAY)
+    x = window.left + WINDOW_WIDTH // 2
+    y_start = window.top + WINDOW_HEIGHT // 2 + distance // 2
+
+    for _ in range(repetitions):
+        focus_fenetre_bluestacks(window)
+        overlay.set_action("Swipe haut")
+        logger.info(f"🖱️ Swipe haut ({distance}px) depuis ({x},{y_start})")
+        swipe_vertical(
+            x,
+            y_start,
+            y_start - distance,
+            duration=duree,
+            logger=logger,
+            label="haut",
+        )
+        time.sleep(0.9)  # laisser l'inertie se dissiper
         
-        # Vérifier si on est arrivé en haut
-        if detecter_fin_scroll_haut(logger, screenshot_cv):
-            logger.info("✅ Arrivé en haut du scroll")
-            break
+
+        debug_idx += 1
+
+
+def scroll_tactile_vers_bas(
+    logger,
+    window,
+    overlay,
+    distance: int = SWIPE_DISTANCE,
+    duree: float = SWIPE_DURATION,
+    repetitions: int = 1,
+) -> None:
+    """
+    Swipe vertical du haut vers le bas pour faire défiler la liste vers le bas.
+    """
+    x = window.left + WINDOW_WIDTH // 2
+    y_start = window.top + WINDOW_HEIGHT // 2 - distance // 2
+
+    for _ in range(repetitions):
+        focus_fenetre_bluestacks(window)
+        overlay.set_action("Swipe bas")
+        logger.info(f"🖱️ Swipe bas ({distance}px) depuis ({x},{y_start})")
+        swipe_vertical(
+            x,
+            y_start,
+            y_start + distance,
+            duration=duree,
+            logger=logger,
+            label="bas",
+        )
+        time.sleep(0.9)
         
-        # Scroll doux vers le haut
-        x_scroll, y_scroll = zone_scroll_center
-        x_global, y_global = window.left + x_scroll, window.top + y_scroll
-        
-        pyautogui.scroll(3, x_global, y_global)  # Scroll doux de 3 unités
-        time.sleep(0.3)  # Pause pour éviter l'inertie
-        scroll_attempts += 1
-    
-    if scroll_attempts >= max_attempts:
-        logger.warning("⚠️ Nombre maximum de tentatives de scroll atteint")
-    
-    time.sleep(0.5)  # Stabilisation finale
+        debug_idx += 1
 
 
-def scroller_vers_bas(logger, window, overlay, zone_scroll_center=(WINDOW_WIDTH//2, WINDOW_HEIGHT//2)):
-    """
-    Scrolle doucement vers le bas pour voir de nouveaux éléments.
-    
-    Returns:
-        bool: True si le scroll a été effectué, False si on était déjà en bas
-    """
-    # Prendre une capture avant le scroll
-    screenshot_avant = pyautogui.screenshot(region=(window.left, window.top, WINDOW_WIDTH, WINDOW_HEIGHT))
-    screenshot_cv_avant = cv2.cvtColor(np.array(screenshot_avant), cv2.COLOR_RGB2GRAY)
-    
-    # Vérifier si on est déjà en bas
-    if detecter_fin_scroll_bas(logger, screenshot_cv_avant):
-        logger.info("✅ Déjà en bas du scroll")
-        return False
-    
-    # Effectuer le scroll
-    x_scroll, y_scroll = zone_scroll_center
-    x_global, y_global = window.left + x_scroll, window.top + y_scroll
-    
-    pyautogui.scroll(-3, x_global, y_global)  # Scroll doux de 3 unités vers le bas
-    time.sleep(0.5)  # Attendre la stabilisation
-    
-    overlay.set_action("Scroll vers le bas")
-    logger.debug("📜 Scroll vers le bas effectué")
-    return True
 
+# --------------------------------------------------------------------------- #
+#  Parcours complet d'un journal (attaque ou défense)                         #
+# --------------------------------------------------------------------------- #
 
-def parcourir_journal_complet(logger, window, overlay, type_journal="attaque"):
+def parcourir_journal_complet(
+    logger,
+    window,
+    overlay,
+    type_journal: str = "attaque",
+) -> List[Tuple[int, int]]:
     """
-    Parcourt complètement un journal (attaque ou défense) et détecte tous les combats.
-    
-    Args:
-        type_journal: "attaque" ou "defense"
-    
-    Returns:
-        Liste de toutes les positions des informations de combat détectées
+    Parcourt tout le journal (attaque ou défense) pour collecter les combats.
+
+    Retourne la liste de *toutes* les positions (x, y) détectées.
     """
-    logger.info(f"🔍 Début du parcours du journal de {type_journal}")
+    logger.info(f"🔍 Parcours du journal {type_journal}")
     overlay.set_phase(f"Journal {type_journal}")
-    
-    toutes_positions = []
-    
-    # 1. Vérifier qu'on est sur le bon onglet
-    screenshot = pyautogui.screenshot(region=(window.left, window.top, WINDOW_WIDTH, WINDOW_HEIGHT))
+
+    toutes_positions: List[Tuple[int, int]] = []
+
+    # 1. Vérification de l'onglet ouvert
+    screenshot = pyautogui.screenshot(
+        region=(window.left, window.top, WINDOW_WIDTH, WINDOW_HEIGHT)
+    )
     screenshot_cv = cv2.cvtColor(np.array(screenshot), cv2.COLOR_RGB2GRAY)
-    
-    if type_journal == "attaque":
-        if not detecter_onglet_journal_attaque(logger, screenshot_cv):
-            logger.error("❌ Pas sur l'onglet journal d'attaque")
-            return []
-    else:
-        if not detecter_onglet_journal_defense(logger, screenshot_cv):
-            logger.error("❌ Pas sur l'onglet journal de défense")
-            return []
-    
-    # 2. Scroller tout en haut
-    scroller_vers_haut(logger, window, overlay)
-    
-    # 3. Parcourir de haut en bas
-    scroll_possible = True
-    iteration = 0
-    
-    while scroll_possible:
-        iteration += 1
-        logger.debug(f"📄 Itération {iteration} du parcours")
-        
-        # Prendre une nouvelle capture
-        screenshot = pyautogui.screenshot(region=(window.left, window.top, WINDOW_WIDTH, WINDOW_HEIGHT))
+    onglet_ok = (
+        detecter_onglet_journal_attaque
+        if type_journal == "attaque"
+        else detecter_onglet_journal_defense
+    )
+    if not onglet_ok(logger, screenshot_cv):
+        logger.error("❌ Mauvais onglet ouvert – abandon")
+        return []
+
+    ### DEBUG SCREENSHOTS ###
+    debug_idx = 0  # compteur de fichiers
+    _save_debug(np.array(screenshot)[:, :, ::-1], [], debug_idx)
+    debug_idx += 1
+    ################################
+
+    # 2. Remonter tout en haut
+    for _ in range(20):
+        screenshot = pyautogui.screenshot(
+            region=(window.left, window.top, WINDOW_WIDTH, WINDOW_HEIGHT)
+        )
         screenshot_cv = cv2.cvtColor(np.array(screenshot), cv2.COLOR_RGB2GRAY)
-        
-        # Détecter les nouveaux combats (en excluant ceux déjà trouvés)
-        nouvelles_positions = detecter_informations_combat(logger, screenshot_cv, toutes_positions)
-        
-        if nouvelles_positions:
-            logger.info(f"✨ Trouvé {len(nouvelles_positions)} nouveau(x) combat(s)")
-            toutes_positions.extend(nouvelles_positions)
-            
-            # Encadrer chaque nouveau combat pour le debug
-            for pos_x, pos_y in nouvelles_positions:
-                overlay.highlight_rectangle(
-                    (window.left + pos_x - 25, window.top + pos_y - 15, 50, 30),
-                    duration=1000,
-                    color="green"
-                )
-                time.sleep(0.2)  # Petit délai entre chaque encadrement
-        else:
-            logger.debug("Aucun nouveau combat détecté")
-        
-        # Essayer de scroller vers le bas
-        scroll_possible = scroller_vers_bas(logger, window, overlay)
-        
-        # Sécurité : limite le nombre d'itérations
-        if iteration > 50:
-            logger.warning("⚠️ Nombre maximum d'itérations atteint")
+        if detecter_fin_scroll_haut(logger, screenshot_cv):
+            logger.info("✅ Haut atteint")
             break
-    
-    logger.info(f"✅ Parcours terminé - Total: {len(toutes_positions)} combats détectés")
+        scroll_tactile_vers_haut(logger, window, overlay)
+
+        ### DEBUG SCREENSHOTS ###
+        _save_debug(np.array(screenshot)[:, :, ::-1], [], debug_idx)
+        debug_idx += 1
+        ################################
+
+    # 3. Descente progressive + collecte combats
+    iteration = 0
+    while True:
+        iteration += 1
+        screenshot = pyautogui.screenshot(
+            region=(window.left, window.top, WINDOW_WIDTH, WINDOW_HEIGHT)
+        )
+        screenshot_cv = cv2.cvtColor(np.array(screenshot), cv2.COLOR_RGB2GRAY)
+
+        # 3.a Détection combats
+        nouvelles = detecter_informations_combat(logger, screenshot_cv, toutes_positions)
+        if nouvelles:
+            logger.info(f"✨ +{len(nouvelles)} combat(s) détecté(s)")
+            toutes_positions.extend(nouvelles)
+
+            # Highlight visuel pour debug
+            # juste après toutes_positions.extend(nouvelles)
+            blocs = []
+            for px, py in nouvelles:              # <- plus « nouvelles » (validées)
+                y1 = max(py - ROW_UP, 0)
+                y2 = min(py + ROW_DOWN, screenshot_cv.shape[0])
+                # score réel de corrélation
+                crop = screenshot_cv[y1:y2, ROW_X1:ROW_X2]
+                _, score, _, _ = cv2.minMaxLoc(
+                    cv2.matchTemplate(crop, crop, cv2.TM_CCOEFF_NORMED))
+                blocs.append((ROW_X1, y1, ROW_X2, y2, score))
+                time.sleep(0.15)
+        else:
+            logger.debug("Aucun nouveau combat sur cette vue")
+
+        ### DEBUG SCREENSHOTS ###
+        # on encadre chaque bloc complet du combat nouvellement détecté
+        blocs = []
+        for px, py in nouvelles:
+            y1 = max(py - ROW_UP, 0)
+            y2 = min(py + ROW_DOWN, screenshot_cv.shape[0])
+            blocs.append((ROW_X1, y1, ROW_X2, y2, 1.0))  # score fictif 1.0
+        _save_debug(np.array(screenshot)[:, :, ::-1], blocs, debug_idx)
+        debug_idx += 1
+        ################################
+
+        # 3.b Scroll vers le bas
+        if detecter_fin_scroll_bas(logger, screenshot_cv):
+            logger.info("✅ Bas atteint")
+            break
+        scroll_tactile_vers_bas(logger, window, overlay)
+
+        ### DEBUG SCREENSHOTS ###
+        _save_debug(np.array(screenshot)[:, :, ::-1], [], debug_idx)
+        debug_idx += 1
+        ################################
+
+        # Sécurité
+        if iteration > 50:
+            logger.warning("⚠️ Plus de 50 itérations – arrêt d'urgence")
+            break
+
+    logger.info(
+        f"▶️ Fin parcours {type_journal} – total : {len(toutes_positions)} combats"
+    )
     return toutes_positions
 
 
+# --------------------------------------------------------------------------- #
+#  Analyse complète (remplace ancienne touche F7)                             #
+# --------------------------------------------------------------------------- #
+
 def analyser_journaux_guerre_guildes(logger, window, overlay):
     """
-    Fonction principale pour analyser complètement les journaux de guerre de guildes.
-    Cette fonction remplace l'ancienne fonction F7.
+    Lance une analyse complète : journal d'attaque PUIS journal de défense.
+
+    Résultat : dict { 'attaque': [...], 'defense': [...], 'total': int }
     """
-    logger.info("🚀 Début de l'analyse complète des journaux de guerre de guildes")
+    logger.info("🚀 Analyse des journaux de guerre de guildes")
     overlay.set_phase("Analyse journaux")
-    
-    # Vérifier qu'on est bien sur la page journal de guerre de guildes
-    screenshot = pyautogui.screenshot(region=(window.left, window.top, WINDOW_WIDTH, WINDOW_HEIGHT))
+
+    ### DEBUG SCREENSHOTS ###
+    _init_log_dir(logger)
+    ################################
+
+    # Vérification onglet attaque initial
+    screenshot = pyautogui.screenshot(
+        region=(window.left, window.top, WINDOW_WIDTH, WINDOW_HEIGHT)
+    )
     screenshot_cv = cv2.cvtColor(np.array(screenshot), cv2.COLOR_RGB2GRAY)
-    
-    # Étape 0: Vérifier qu'on est sur journal d'attaque
     if not detecter_onglet_journal_attaque(logger, screenshot_cv):
-        logger.error("❌ Pas sur l'onglet journal d'attaque. Veuillez d'abord y naviguer.")
-        overlay.set_phase("Erreur - Mauvais onglet")
+        logger.error("❌ Onglet attaque NON ouvert – stop")
+        overlay.set_phase("Erreur onglet")
         return
-    
-    # Étapes 1-6: Parcourir le journal d'attaque
+
+    # 1) Analyse journal d'attaque
     positions_attaque = parcourir_journal_complet(logger, window, overlay, "attaque")
-    logger.info(f"📊 Journal d'attaque: {len(positions_attaque)} combats détectés")
-    
-    # Étape 7: Basculer vers journal de défense
-    logger.info("🔄 Basculement vers journal de défense")
-    overlay.set_action("Changement d'onglet")
-    
-    # Prendre une nouvelle capture pour détecter le bouton
-    screenshot = pyautogui.screenshot(region=(window.left, window.top, WINDOW_WIDTH, WINDOW_HEIGHT))
+    logger.info(f"📊 Attaque : {len(positions_attaque)} combats")
+
+    # 2) Bascule vers journal de défense
+    overlay.set_action("Changement onglet défense")
+    screenshot = pyautogui.screenshot(
+        region=(window.left, window.top, WINDOW_WIDTH, WINDOW_HEIGHT)
+    )
     screenshot_cv = cv2.cvtColor(np.array(screenshot), cv2.COLOR_RGB2GRAY)
-    
-    bouton_defense = detecter_bouton_journal_defense(logger, screenshot_cv)
-    if bouton_defense:
-        cliquer_coordonnees(logger, window, bouton_defense[0], bouton_defense[1])
-        time.sleep(2)  # Attendre le changement d'onglet
-        logger.info("✅ Clic sur journal de défense effectué")
+    bouton = detecter_bouton_journal_defense(logger, screenshot_cv)
+    if bouton:
+        cliquer_coordonnees(logger, window, bouton[0], bouton[1])
+        time.sleep(2)  # laisser l'UI changer d'onglet
     else:
-        logger.error("❌ Impossible de trouver le bouton journal de défense")
+        logger.error("❌ Bouton défense introuvable – analyse incomplète")
         return
-    
-    # Étape 8: Parcourir le journal de défense
+
+    # 3) Analyse journal de défense
     positions_defense = parcourir_journal_complet(logger, window, overlay, "defense")
-    logger.info(f"📊 Journal de défense: {len(positions_defense)} combats détectés")
-    
-    # Résumé final
-    total_combats = len(positions_attaque) + len(positions_defense)
-    logger.info(f"🎯 Analyse terminée - Total: {total_combats} combats (Attaque: {len(positions_attaque)}, Défense: {len(positions_defense)})")
+    logger.info(f"📊 Défense : {len(positions_defense)} combats")
+
+    # 4) Résumé final
+    total = len(positions_attaque) + len(positions_defense)
+    logger.info(
+        f"🎯 Analyse terminée – Total {total} "
+        f"(Atk {len(positions_attaque)}, Def {len(positions_defense)})"
+    )
     overlay.set_phase("Analyse terminée")
-    
+
     return {
         "attaque": positions_attaque,
         "defense": positions_defense,
-        "total": total_combats
+        "total": total,
     }
