@@ -33,29 +33,27 @@ import pyautogui
 # --------------------------------------------------------------------------- #
 import shutil                 #  <-- déjà peut-être importé plus bas ? sinon ajoute
 ### DEBUG SCREENSHOTS ##############################################
-DIR_LOG = "LOG_SCREENSHOTS"
+DIR_LOG_ROOT = "LOG_SCREENSHOTS"
+DIR_LOG = DIR_LOG_ROOT
 
 import datetime, tempfile
 
 def _init_log_dir(logger):
     """
-    • Si LOG_SCREENSHOTS/ est encore verrouillé, on le renomme en
-      LOG_SCREENSHOTS_old_<horodatage>/ plutôt que d’échouer.
-    • Puis on (re)crée LOG_SCREENSHOTS/.
+    Prépare un dossier dédié pour la session de debug des captures.
+
+    Pour éviter les erreurs d'accès sous Windows (répertoire encore ouvert),
+    on crée simplement un sous-dossier horodaté à chaque exécution au lieu de
+    supprimer l'ancien.
     """
+    global DIR_LOG
     ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    if os.path.isdir(DIR_LOG):
-        try:
-            shutil.rmtree(DIR_LOG)
-        except PermissionError:
-            alt = f"{DIR_LOG}_old_{ts}"
-            logger.warning(f"[DEBUG] {DIR_LOG} verrouillé → renommage → {alt}")
-            try:
-                os.rename(DIR_LOG, alt)
-            except Exception as e:
-                logger.error(f"Impossible de renommer {DIR_LOG}: {e}")
-    os.makedirs(DIR_LOG, exist_ok=True)
-    logger.debug(f"[DEBUG] Dossier {DIR_LOG}/ prêt")
+    DIR_LOG = os.path.join(DIR_LOG_ROOT, ts)
+    try:
+        os.makedirs(DIR_LOG, exist_ok=True)
+        logger.debug(f"[DEBUG] Dossier {DIR_LOG}/ prêt")
+    except Exception as e:
+        logger.error(f"Impossible de créer {DIR_LOG}: {e}")
 
 def _save_debug(bgr_img, rects, idx):
     """
@@ -375,9 +373,6 @@ def scroll_tactile_vers_haut(
             label="haut",
         )
         time.sleep(0.9)  # laisser l'inertie se dissiper
-        
-
-        debug_idx += 1
 
 
 def scroll_tactile_vers_bas(
@@ -407,8 +402,6 @@ def scroll_tactile_vers_bas(
             label="bas",
         )
         time.sleep(0.9)
-        
-        debug_idx += 1
 
 
 
