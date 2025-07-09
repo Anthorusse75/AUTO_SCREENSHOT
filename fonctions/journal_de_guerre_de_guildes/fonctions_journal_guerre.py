@@ -308,7 +308,7 @@ def _detecter_fin_scroll(
     result = cv2.matchTemplate(screenshot_cv, template, cv2.TM_CCOEFF_NORMED)
     _, max_val, _, _ = cv2.minMaxLoc(result)
     logger.debug(f"Limite {zone} score : {max_val:.3f}")
-    return max_val >= LIMIT_MATCH_THRESHOLD
+    return max_val >= 0.92        # 0.92 ≃ visuellement identique
 
 
 def detecter_fin_scroll_haut(logger, screenshot_cv) -> bool:
@@ -341,8 +341,10 @@ SWIPE_DURATION = 0.8  # s – assez lent pour être reconnu par Android
 # --------------------------------------------------------------------------- #
 #  Paramètres géométrie d’un bloc combat (à placer avec les autres constantes)
 # --------------------------------------------------------------------------- #
-ROW_X1, ROW_X2 = 240, 1200   # bords gauche / droit du tableau
-ROW_UP, ROW_DOWN = 60, 50    # px au-dessus / au-dessous du centre du bouton « i »
+PANEL_X1 = 265          # bord gauche réellement à l’intérieur du panneau brun
+PANEL_X2 = 1315         # juste avant la bordure dorée
+ROW_X1, ROW_X2 = PANEL_X1, PANEL_X2
+ROW_UP, ROW_DOWN = 75, 60
 ROW_W, ROW_H = ROW_X2 - ROW_X1, ROW_UP + ROW_DOWN
 
 
@@ -497,16 +499,21 @@ def parcourir_journal_complet(
         for px, py in nouvelles:
             y1 = max(py - ROW_UP, 0)
             y2 = min(py + ROW_DOWN, screenshot_cv.shape[0])
-            blocs.append((ROW_X1, y1, ROW_X2, y2, 1.0))  # score fictif 1.0
+            blocs.append((ROW_X1 + 1, y1, ROW_X2 - 1, y2, 1.0))  # score fictif 1.0
         _save_debug(np.array(screenshot)[:, :, ::-1], blocs, debug_idx)
         debug_idx += 1
         ################################
 
         # 3.b Scroll vers le bas
+        scroll_tactile_vers_bas(logger, window, overlay)
+
+        screenshot = pyautogui.screenshot(
+            region=(window.left, window.top, WINDOW_WIDTH, WINDOW_HEIGHT)
+        )
+        screenshot_cv = cv2.cvtColor(np.array(screenshot), cv2.COLOR_RGB2GRAY)
         if detecter_fin_scroll_bas(logger, screenshot_cv):
             logger.info("✅ Bas atteint")
             break
-        scroll_tactile_vers_bas(logger, window, overlay)
 
         ### DEBUG SCREENSHOTS ###
         _save_debug(np.array(screenshot)[:, :, ::-1], [], debug_idx)
