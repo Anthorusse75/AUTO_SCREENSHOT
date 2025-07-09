@@ -90,6 +90,20 @@ from fonctions.detection_page import (
 from configuration.fenetre_utils import cliquer_coordonnees
 
 # --------------------------------------------------------------------------- #
+#  Gestes « scroll » (swipe vertical) et géométrie du tableau                #
+# --------------------------------------------------------------------------- #
+SWIPE_DISTANCE = 780               # px
+SWIPE_DURATION = 0.55              # s
+
+PANEL_X1 = 250                # bord gauche « brun »
+PANEL_X2 = 1340               # juste avant la colonne barre dorée
+ROW_X1, ROW_X2 = PANEL_X1, PANEL_X2
+ROW_UP, ROW_DOWN = 80, 65     # englobe la ligne « Position : n »
+ROW_W, ROW_H = ROW_X2 - ROW_X1, ROW_UP + ROW_DOWN
+
+SWIPE_X = (ROW_X1 + ROW_X2) // 2   # trajectoire pile au centre du tableau
+
+# --------------------------------------------------------------------------- #
 #  Helpers fenêtre et gestes                                                 #
 # --------------------------------------------------------------------------- #
 
@@ -329,26 +343,6 @@ def detecter_fin_scroll_bas(logger, screenshot_cv) -> bool:
         "templates/journal_de_guerre_de_guildes/limites/bas_scroll.png",
         zone="bas",
     )
-
-
-# --------------------------------------------------------------------------- #
-#  Gestes « scroll » (swipe vertical)                                         #
-# --------------------------------------------------------------------------- #
-
-SWIPE_DISTANCE = 780               # px
-SWIPE_DURATION = 0.55              # s
-
-# --------------------------------------------------------------------------- #
-#  Paramètres géométrie d’un bloc combat (à placer avec les autres constantes)
-# --------------------------------------------------------------------------- #
-PANEL_X1 = 250                # bord gauche « brun »
-PANEL_X2 = 1340               # juste avant la colonne barre dorée
-ROW_X1, ROW_X2 = PANEL_X1, PANEL_X2
-ROW_UP, ROW_DOWN = 80, 65     # englobe la ligne « Position : n »
-ROW_W, ROW_H = ROW_X2 - ROW_X1, ROW_UP + ROW_DOWN
-
-SWIPE_X = (ROW_X1 + ROW_X2) // 2   # trajectoire pile au centre du tableau
-
 
 def scroll_tactile_vers_haut(
     logger,
