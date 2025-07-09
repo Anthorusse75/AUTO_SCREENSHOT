@@ -28,6 +28,10 @@ import cv2
 import numpy as np
 import pyautogui
 
+# --- repérage de la bordure dorée ------------------------------------------
+GOLD_MIN   = 180          # seuil gris-clair ≈ bordure dorée
+SCAN_RANGE = 140          # on ne remonte / descend jamais de > 140 px
+
 # --------------------------------------------------------------------------- #
 #  Tout en haut du fichier – juste après les imports existants
 # --------------------------------------------------------------------------- #
@@ -102,6 +106,26 @@ ROW_UP, ROW_DOWN = 80, 65     # englobe la ligne « Position : n »
 ROW_W, ROW_H = ROW_X2 - ROW_X1, ROW_UP + ROW_DOWN
 
 SWIPE_X = (ROW_X1 + ROW_X2) // 2   # trajectoire pile au centre du tableau
+
+def find_row_bounds(gray: np.ndarray, cx: int, cy: int) -> Tuple[int, int]:
+    """Remonte puis descend depuis cy pour trouver la 1re ligne claire (>GOLD_MIN)
+    → renvoie (y_top, y_bot) de la bordure dorée du bloc."""
+    # vers le haut
+    y_top = cy
+    for dy in range(SCAN_RANGE):
+        if gray[cy - dy, cx] > GOLD_MIN:
+            y_top = cy - dy
+            break
+    # vers le bas
+    y_bot = cy
+    H = gray.shape[0]
+    for dy in range(SCAN_RANGE):
+        if cy + dy >= H:
+            break
+        if gray[cy + dy, cx] > GOLD_MIN:
+            y_bot = cy + dy
+            break
+    return y_top, y_bot
 
 # --------------------------------------------------------------------------- #
 #  Helpers fenêtre et gestes                                                 #
@@ -355,7 +379,7 @@ def scroll_tactile_vers_haut(
     """
     Swipe vertical du bas vers le haut pour faire défiler la liste vers le haut.
     """
-    x = window.left + SWIPE_X
+    x = window.left + (ROW_X1 + ROW_X2) // 2
     y_start = window.top + WINDOW_HEIGHT // 2 + distance // 2
 
     for _ in range(repetitions):
@@ -384,7 +408,7 @@ def scroll_tactile_vers_bas(
     """
     Swipe vertical du haut vers le bas pour faire défiler la liste vers le bas.
     """
-    x = window.left + SWIPE_X
+    x = window.left + (ROW_X1 + ROW_X2) // 2
     y_start = window.top + WINDOW_HEIGHT // 2 - distance // 2
 
     for _ in range(repetitions):
@@ -478,13 +502,13 @@ def parcourir_journal_complet(
             # juste après toutes_positions.extend(nouvelles)
             blocs = []
             for px, py in nouvelles:              # <- plus « nouvelles » (validées)
-                y1 = max(py - ROW_UP, 0)
-                y2 = min(py + ROW_DOWN, screenshot_cv.shape[0])
+                y1, y2 = find_row_bounds(screenshot_cv, px, py)
+                right = px - 55
                 # score réel de corrélation
-                crop = screenshot_cv[y1:y2, ROW_X1:ROW_X2]
+                crop = screenshot_cv[y1:y2, ROW_X1:right]
                 _, score, _, _ = cv2.minMaxLoc(
                     cv2.matchTemplate(crop, crop, cv2.TM_CCOEFF_NORMED))
-                blocs.append((ROW_X1, y1, ROW_X2, y2, score))
+                blocs.append((ROW_X1, y1, right, y2, score))
                 time.sleep(0.15)
         else:
             logger.debug("Aucun nouveau combat sur cette vue")
@@ -493,9 +517,9 @@ def parcourir_journal_complet(
         # on encadre chaque bloc complet du combat nouvellement détecté
         blocs = []
         for px, py in nouvelles:
-            y1 = max(py - ROW_UP, 0)
-            y2 = min(py + ROW_DOWN, screenshot_cv.shape[0])
-            blocs.append((ROW_X1 + 2, y1, ROW_X2 - 2, y2, 1.0))  # score fictif 1.0
+            y1, y2 = find_row_bounds(screenshot_cv, px, py)
+            right = px - 55                              # 55 px ≃ demi-largeur de l’icône + marge
+            blocs.append((ROW_X1 + 2, y1, right, y2, 1.0))  # score fictif 1.0
         _save_debug(np.array(screenshot)[:, :, ::-1], blocs, debug_idx)
         debug_idx += 1
         ################################
