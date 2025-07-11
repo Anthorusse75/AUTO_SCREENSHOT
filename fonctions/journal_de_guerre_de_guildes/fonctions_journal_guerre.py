@@ -108,23 +108,35 @@ ROW_W, ROW_H = ROW_X2 - ROW_X1, ROW_UP + ROW_DOWN
 SWIPE_X = (ROW_X1 + ROW_X2) // 2   # trajectoire pile au centre du tableau
 
 def find_row_bounds(gray: np.ndarray, cx: int, cy: int) -> Tuple[int, int]:
-    """Remonte puis descend depuis cy pour trouver la 1re ligne claire (>GOLD_MIN)
-    → renvoie (y_top, y_bot) de la bordure dorée du bloc."""
-    # vers le haut
+    """Remonte puis descend depuis ``cy`` pour détecter la bordure dorée.
+
+    Si aucune zone claire n'est trouvée dans la portée ``SCAN_RANGE``
+    on retombe sur les marges ``ROW_UP``/``ROW_DOWN``.
+    """
     y_top = cy
-    for dy in range(SCAN_RANGE):
-        if gray[cy - dy, cx] > GOLD_MIN:
-            y_top = cy - dy
+    for dy in range(1, SCAN_RANGE + 1):
+        y = cy - dy
+        if y < 0:
             break
-    # vers le bas
+        if gray[y, cx] > GOLD_MIN:
+            y_top = y
+            break
+
     y_bot = cy
     H = gray.shape[0]
-    for dy in range(SCAN_RANGE):
-        if cy + dy >= H:
+    for dy in range(1, SCAN_RANGE + 1):
+        y = cy + dy
+        if y >= H:
             break
-        if gray[cy + dy, cx] > GOLD_MIN:
-            y_bot = cy + dy
+        if gray[y, cx] > GOLD_MIN:
+            y_bot = y
             break
+
+    if y_bot <= y_top:
+        # Fallback : pas de bordure détectée
+        y_top = max(cy - ROW_UP, 0)
+        y_bot = min(cy + ROW_DOWN, H)
+
     return y_top, y_bot
 
 # --------------------------------------------------------------------------- #
@@ -503,7 +515,9 @@ def parcourir_journal_complet(
             blocs = []
             for px, py in nouvelles:              # <- plus « nouvelles » (validées)
                 y1, y2 = find_row_bounds(screenshot_cv, px, py)
-                right = px - 55
+                right = max(px - 55, ROW_X1 + 1)
+                if y2 <= y1 or right <= ROW_X1:
+                    continue  # zone invalide
                 # score réel de corrélation
                 crop = screenshot_cv[y1:y2, ROW_X1:right]
                 _, score, _, _ = cv2.minMaxLoc(
@@ -518,7 +532,9 @@ def parcourir_journal_complet(
         blocs = []
         for px, py in nouvelles:
             y1, y2 = find_row_bounds(screenshot_cv, px, py)
-            right = px - 55                              # 55 px ≃ demi-largeur de l’icône + marge
+            right = max(px - 55, ROW_X1 + 1)
+            if y2 <= y1 or right <= ROW_X1:
+                continue
             blocs.append((ROW_X1 + 2, y1, right, y2, 1.0))  # score fictif 1.0
         _save_debug(np.array(screenshot)[:, :, ::-1], blocs, debug_idx)
         debug_idx += 1
