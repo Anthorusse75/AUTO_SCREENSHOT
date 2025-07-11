@@ -96,8 +96,9 @@ from configuration.fenetre_utils import cliquer_coordonnees
 # --------------------------------------------------------------------------- #
 #  Gestes « scroll » (swipe vertical) et géométrie du tableau                #
 # --------------------------------------------------------------------------- #
-SWIPE_DISTANCE = 780               # px
-SWIPE_DURATION = 0.55              # s
+# ­­­­­ réglage plus doux : avance d'un seul bloc (≈ 350 px) -------------
+SWIPE_DISTANCE = 350          # px
+SWIPE_DURATION = 0.80         # s  (léger ralenti)
 
 PANEL_X1 = 250                # bord gauche « brun »
 PANEL_X2 = 1340               # juste avant la colonne barre dorée
@@ -391,7 +392,7 @@ def scroll_tactile_vers_haut(
     """
     Swipe vertical du bas vers le haut pour faire défiler la liste vers le haut.
     """
-    x = window.left + (ROW_X1 + ROW_X2) // 2
+    x = window.left + SWIPE_X
     y_start = window.top + WINDOW_HEIGHT // 2 + distance // 2
 
     for _ in range(repetitions):
@@ -420,7 +421,7 @@ def scroll_tactile_vers_bas(
     """
     Swipe vertical du haut vers le bas pour faire défiler la liste vers le bas.
     """
-    x = window.left + (ROW_X1 + ROW_X2) // 2
+    x = window.left + SWIPE_X
     y_start = window.top + WINDOW_HEIGHT // 2 - distance // 2
 
     for _ in range(repetitions):
@@ -515,14 +516,13 @@ def parcourir_journal_complet(
             blocs = []
             for px, py in nouvelles:              # <- plus « nouvelles » (validées)
                 y1, y2 = find_row_bounds(screenshot_cv, px, py)
-                right = max(px - 55, ROW_X1 + 1)
-                if y2 <= y1 or right <= ROW_X1:
+                if y2 <= y1:
                     continue  # zone invalide
                 # score réel de corrélation
-                crop = screenshot_cv[y1:y2, ROW_X1:right]
+                crop = screenshot_cv[y1:y2, ROW_X1:ROW_X2]
                 _, score, _, _ = cv2.minMaxLoc(
                     cv2.matchTemplate(crop, crop, cv2.TM_CCOEFF_NORMED))
-                blocs.append((ROW_X1, y1, right, y2, score))
+                blocs.append((ROW_X1, y1, ROW_X2, y2, score))
                 time.sleep(0.15)
         else:
             logger.debug("Aucun nouveau combat sur cette vue")
@@ -532,10 +532,8 @@ def parcourir_journal_complet(
         blocs = []
         for px, py in nouvelles:
             y1, y2 = find_row_bounds(screenshot_cv, px, py)
-            right = max(px - 55, ROW_X1 + 1)
-            if y2 <= y1 or right <= ROW_X1:
-                continue
-            blocs.append((ROW_X1 + 2, y1, right, y2, 1.0))  # score fictif 1.0
+            if y2 - y1 >= 25:                    # on ignore les lignes minuscules
+                blocs.append((ROW_X1, y1, ROW_X2, y2, 1.0))
         _save_debug(np.array(screenshot)[:, :, ::-1], blocs, debug_idx)
         debug_idx += 1
         ################################
