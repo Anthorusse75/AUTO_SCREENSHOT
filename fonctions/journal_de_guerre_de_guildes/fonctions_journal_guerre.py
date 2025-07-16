@@ -28,34 +28,36 @@ import cv2
 import numpy as np
 import pyautogui
 
+# --- repérage de la bordure dorée ------------------------------------------
+GOLD_MIN   = 180          # seuil gris-clair ≈ bordure dorée
+SCAN_RANGE = 140          # on ne remonte / descend jamais de > 140 px
+
 # --------------------------------------------------------------------------- #
 #  Tout en haut du fichier – juste après les imports existants
 # --------------------------------------------------------------------------- #
 import shutil                 #  <-- déjà peut-être importé plus bas ? sinon ajoute
 ### DEBUG SCREENSHOTS ##############################################
-DIR_LOG = "LOG_SCREENSHOTS"
+DIR_LOG_ROOT = "LOG_SCREENSHOTS"
+DIR_LOG = DIR_LOG_ROOT
 
 import datetime, tempfile
 
 def _init_log_dir(logger):
     """
-    • Si LOG_SCREENSHOTS/ est encore verrouillé, on le renomme en
-      LOG_SCREENSHOTS_old_<horodatage>/ plutôt que d’échouer.
-    • Puis on (re)crée LOG_SCREENSHOTS/.
+    Prépare un dossier dédié pour la session de debug des captures.
+
+    Pour éviter les erreurs d'accès sous Windows (répertoire encore ouvert),
+    on crée simplement un sous-dossier horodaté à chaque exécution au lieu de
+    supprimer l'ancien.
     """
+    global DIR_LOG
     ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    if os.path.isdir(DIR_LOG):
-        try:
-            shutil.rmtree(DIR_LOG)
-        except PermissionError:
-            alt = f"{DIR_LOG}_old_{ts}"
-            logger.warning(f"[DEBUG] {DIR_LOG} verrouillé → renommage → {alt}")
-            try:
-                os.rename(DIR_LOG, alt)
-            except Exception as e:
-                logger.error(f"Impossible de renommer {DIR_LOG}: {e}")
-    os.makedirs(DIR_LOG, exist_ok=True)
-    logger.debug(f"[DEBUG] Dossier {DIR_LOG}/ prêt")
+    DIR_LOG = os.path.join(DIR_LOG_ROOT, ts)
+    try:
+        os.makedirs(DIR_LOG, exist_ok=True)
+        logger.debug(f"[DEBUG] Dossier {DIR_LOG}/ prêt")
+    except Exception as e:
+        logger.error(f"Impossible de créer {DIR_LOG}: {e}")
 
 def _save_debug(bgr_img, rects, idx):
     """
@@ -92,6 +94,53 @@ from fonctions.detection_page import (
 from configuration.fenetre_utils import cliquer_coordonnees
 
 # --------------------------------------------------------------------------- #
+#  Gestes « scroll » (swipe vertical) et géométrie du tableau                #
+# --------------------------------------------------------------------------- #
+# ­­­­­ réglage plus doux : avance d'un seul bloc (≈ 350 px) -------------
+SWIPE_DISTANCE = 350          # px
+SWIPE_DURATION = 0.80         # s  (léger ralenti)
+
+PANEL_X1 = 250                # bord gauche « brun »
+PANEL_X2 = 1340               # juste avant la colonne barre dorée
+ROW_X1, ROW_X2 = PANEL_X1, PANEL_X2
+ROW_UP, ROW_DOWN = 80, 65     # englobe la ligne « Position : n »
+ROW_W, ROW_H = ROW_X2 - ROW_X1, ROW_UP + ROW_DOWN
+
+SWIPE_X = (ROW_X1 + ROW_X2) // 2   # trajectoire pile au centre du tableau
+
+def find_row_bounds(gray: np.ndarray, cx: int, cy: int) -> Tuple[int, int]:
+    """Remonte puis descend depuis ``cy`` pour détecter la bordure dorée.
+
+    Si aucune zone claire n'est trouvée dans la portée ``SCAN_RANGE``
+    on retombe sur les marges ``ROW_UP``/``ROW_DOWN``.
+    """
+    y_top = cy
+    for dy in range(1, SCAN_RANGE + 1):
+        y = cy - dy
+        if y < 0:
+            break
+        if gray[y, cx] > GOLD_MIN:
+            y_top = y
+            break
+
+    y_bot = cy
+    H = gray.shape[0]
+    for dy in range(1, SCAN_RANGE + 1):
+        y = cy + dy
+        if y >= H:
+            break
+        if gray[y, cx] > GOLD_MIN:
+            y_bot = y
+            break
+
+    if y_bot <= y_top:
+        # Fallback : pas de bordure détectée
+        y_top = max(cy - ROW_UP, 0)
+        y_bot = min(cy + ROW_DOWN, H)
+
+    return y_top, y_bot
+
+# --------------------------------------------------------------------------- #
 #  Helpers fenêtre et gestes                                                 #
 # --------------------------------------------------------------------------- #
 
@@ -117,7 +166,7 @@ def focus_fenetre_bluestacks(window) -> None:
 
 
 def swipe_vertical(x: int, y_start: int, y_end: int,
-                   duration: float = 1.2,
+                   duration: float = SWIPE_DURATION,
                    logger=None, label: str = "swipe") -> None:
     """
     Swipe Android fiable :
@@ -310,7 +359,7 @@ def _detecter_fin_scroll(
     result = cv2.matchTemplate(screenshot_cv, template, cv2.TM_CCOEFF_NORMED)
     _, max_val, _, _ = cv2.minMaxLoc(result)
     logger.debug(f"Limite {zone} score : {max_val:.3f}")
-    return max_val >= LIMIT_MATCH_THRESHOLD
+    return max_val >= 0.92        # 0.92 ≃ visuellement identique
 
 
 def detecter_fin_scroll_haut(logger, screenshot_cv) -> bool:
@@ -332,22 +381,6 @@ def detecter_fin_scroll_bas(logger, screenshot_cv) -> bool:
         zone="bas",
     )
 
-
-# --------------------------------------------------------------------------- #
-#  Gestes « scroll » (swipe vertical)                                         #
-# --------------------------------------------------------------------------- #
-
-SWIPE_DISTANCE = 600  # px – plus fiable qu'un drag de 350 px
-SWIPE_DURATION = 0.8  # s – assez lent pour être reconnu par Android
-
-# --------------------------------------------------------------------------- #
-#  Paramètres géométrie d’un bloc combat (à placer avec les autres constantes)
-# --------------------------------------------------------------------------- #
-ROW_X1, ROW_X2 = 240, 1200   # bords gauche / droit du tableau
-ROW_UP, ROW_DOWN = 60, 50    # px au-dessus / au-dessous du centre du bouton « i »
-ROW_W, ROW_H = ROW_X2 - ROW_X1, ROW_UP + ROW_DOWN
-
-
 def scroll_tactile_vers_haut(
     logger,
     window,
@@ -359,7 +392,7 @@ def scroll_tactile_vers_haut(
     """
     Swipe vertical du bas vers le haut pour faire défiler la liste vers le haut.
     """
-    x = window.left + WINDOW_WIDTH // 2
+    x = window.left + SWIPE_X
     y_start = window.top + WINDOW_HEIGHT // 2 + distance // 2
 
     for _ in range(repetitions):
@@ -375,9 +408,6 @@ def scroll_tactile_vers_haut(
             label="haut",
         )
         time.sleep(0.9)  # laisser l'inertie se dissiper
-        
-
-        debug_idx += 1
 
 
 def scroll_tactile_vers_bas(
@@ -391,7 +421,7 @@ def scroll_tactile_vers_bas(
     """
     Swipe vertical du haut vers le bas pour faire défiler la liste vers le bas.
     """
-    x = window.left + WINDOW_WIDTH // 2
+    x = window.left + SWIPE_X
     y_start = window.top + WINDOW_HEIGHT // 2 - distance // 2
 
     for _ in range(repetitions):
@@ -407,8 +437,6 @@ def scroll_tactile_vers_bas(
             label="bas",
         )
         time.sleep(0.9)
-        
-        debug_idx += 1
 
 
 
@@ -487,8 +515,9 @@ def parcourir_journal_complet(
             # juste après toutes_positions.extend(nouvelles)
             blocs = []
             for px, py in nouvelles:              # <- plus « nouvelles » (validées)
-                y1 = max(py - ROW_UP, 0)
-                y2 = min(py + ROW_DOWN, screenshot_cv.shape[0])
+                y1, y2 = find_row_bounds(screenshot_cv, px, py)
+                if y2 <= y1:
+                    continue  # zone invalide
                 # score réel de corrélation
                 crop = screenshot_cv[y1:y2, ROW_X1:ROW_X2]
                 _, score, _, _ = cv2.minMaxLoc(
@@ -502,18 +531,23 @@ def parcourir_journal_complet(
         # on encadre chaque bloc complet du combat nouvellement détecté
         blocs = []
         for px, py in nouvelles:
-            y1 = max(py - ROW_UP, 0)
-            y2 = min(py + ROW_DOWN, screenshot_cv.shape[0])
-            blocs.append((ROW_X1, y1, ROW_X2, y2, 1.0))  # score fictif 1.0
+            y1, y2 = find_row_bounds(screenshot_cv, px, py)
+            if y2 - y1 >= 25:                    # on ignore les lignes minuscules
+                blocs.append((ROW_X1, y1, ROW_X2, y2, 1.0))
         _save_debug(np.array(screenshot)[:, :, ::-1], blocs, debug_idx)
         debug_idx += 1
         ################################
 
         # 3.b Scroll vers le bas
+        scroll_tactile_vers_bas(logger, window, overlay)
+
+        screenshot = pyautogui.screenshot(
+            region=(window.left, window.top, WINDOW_WIDTH, WINDOW_HEIGHT)
+        )
+        screenshot_cv = cv2.cvtColor(np.array(screenshot), cv2.COLOR_RGB2GRAY)
         if detecter_fin_scroll_bas(logger, screenshot_cv):
             logger.info("✅ Bas atteint")
             break
-        scroll_tactile_vers_bas(logger, window, overlay)
 
         ### DEBUG SCREENSHOTS ###
         _save_debug(np.array(screenshot)[:, :, ::-1], [], debug_idx)
